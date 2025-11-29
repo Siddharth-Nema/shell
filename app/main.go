@@ -15,7 +15,9 @@ func main() {
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 		fmt.Scanln(&input)
-
+		if input == "exit" {
+			os.Exit(0)
+		}
 		fmt.Fprintf(os.Stdout, "%s: command not found\n", input)
 	}
 
