@@ -45,6 +45,12 @@ func main() {
 			} else {
 				fmt.Fprintf(os.Stdout, "%s: not found\n", tokens[1])
 			}
+		} else if _, err := findExecutable(command); err == nil {
+			cmd := exec.Command(command, tokens[1:]...)
+			output, err := cmd.CombinedOutput()
+			if err == nil {
+				fmt.Printf("%s", output)
+			}
 		} else {
 			fmt.Fprintf(os.Stdout, "%s: command not found\n", command)
 		}
