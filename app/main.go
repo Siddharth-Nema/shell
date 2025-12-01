@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -11,7 +13,20 @@ import (
 var _ = fmt.Fprint
 var _ = os.Stdout
 
+func findExecutable(name string) (string, error) {
+	exe, err := exec.LookPath(name)
+	return exe, err
+
+}
+
 func main() {
+	crudePath := os.Getenv("PATH")
+	paths := strings.Split(crudePath, ";")
+
+	for _, value := range paths {
+		fmt.Println(value)
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
@@ -30,8 +45,10 @@ func main() {
 			}
 			fmt.Println()
 		} else if command == "type" {
-			if desc, exists := CommandDescriptions[tokens[1]]; exists {
-				fmt.Fprintf(os.Stdout, "%s\n", desc)
+			if slices.Contains(BuiltinCommands, tokens[1]) {
+				fmt.Printf("%s is a shell builtin\n", tokens[1])
+			} else if fPath, err := findExecutable(tokens[1]); err == nil {
+				fmt.Printf("%s is %s\n", tokens[1], fPath)
 			} else {
 				fmt.Fprintf(os.Stdout, "%s: not found\n", tokens[1])
 			}
@@ -39,5 +56,4 @@ func main() {
 			fmt.Fprintf(os.Stdout, "%s: command not found\n", command)
 		}
 	}
-
 }
