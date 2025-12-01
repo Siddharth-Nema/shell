@@ -20,13 +20,6 @@ func findExecutable(name string) (string, error) {
 }
 
 func main() {
-	crudePath := os.Getenv("PATH")
-	paths := strings.Split(crudePath, ";")
-
-	for _, value := range paths {
-		fmt.Println(value)
-	}
-
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
