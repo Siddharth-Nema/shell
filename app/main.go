@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -47,9 +48,18 @@ func main() {
 			}
 		case "cd":
 			if len(args) > 0 {
-				err := os.Chdir(args[0])
+				var newDir string
+				if args[0] == "~" {
+					newDir, err = os.UserHomeDir()
+					if err != nil {
+						log.Fatal(err)
+					}
+				} else {
+					newDir = args[0]
+				}
+				err := os.Chdir(newDir)
 				if err != nil {
-					fmt.Printf("cd: %s: No such file or directory\n", args[0])
+					fmt.Printf("cd: %s: No such file or directory\n", newDir)
 				}
 			}
 		default:
