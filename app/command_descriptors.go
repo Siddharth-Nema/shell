@@ -5,4 +5,5 @@ var BuiltinCommands = []string{
 	"echo",
 	"exit",
 	"type",
+	"pwd",
 }
