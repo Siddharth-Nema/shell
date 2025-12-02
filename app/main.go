@@ -18,6 +18,8 @@ func tokenize(inp string) []string {
 	var tokens []string
 	inSingleQuotes := false
 
+	inp = strings.ReplaceAll(inp, "''", "")
+
 	for i := 0; i < len(inp); i++ {
 		if inp[i] == '\'' {
 			if len(token) > 0 {
