@@ -45,6 +45,13 @@ func main() {
 			if err == nil {
 				fmt.Println(pwd)
 			}
+		case "cd":
+			if len(args) > 0 {
+				err := os.Chdir(args[0])
+				if err != nil {
+					fmt.Printf("cd: %s No such file or directory\n", args[0])
+				}
+			}
 		default:
 			if _, err := findExecutable(command); err == nil {
 				cmd := exec.Command(command, args...)
