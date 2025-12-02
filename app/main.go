@@ -13,6 +13,44 @@ import (
 var _ = fmt.Fprint
 var _ = os.Stdout
 
+func tokenize(inp string) []string {
+	var token string
+	var tokens []string
+	inSingleQuotes := false
+
+	for i := 0; i < len(inp); i++ {
+		if inp[i] == '\'' {
+			if len(token) > 0 {
+				tokens = append(tokens, token)
+				token = ""
+			}
+			inSingleQuotes = !inSingleQuotes
+			continue
+		}
+
+		if inp[i] == ' ' {
+			if inSingleQuotes {
+				token += string(inp[i])
+			} else {
+				if len(token) > 0 {
+					tokens = append(tokens, token)
+					token = ""
+				}
+			}
+
+		} else {
+			token += string(inp[i])
+		}
+	}
+
+	if len(token) > 0 {
+		tokens = append(tokens, token)
+		token = ""
+	}
+
+	return tokens
+}
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -22,7 +60,7 @@ func main() {
 			break
 		}
 		inp = strings.TrimSpace(inp)
-		tokens := strings.Split(inp, " ")
+		tokens := tokenize(inp)
 		command := tokens[0]
 		args := tokens[1:]
 
