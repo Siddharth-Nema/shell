@@ -5,19 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"slices"
 	"strings"
 )
 
 // Ensures gofmt doesn't remove the "fmt" and "os" imports in stage 1 (feel free to remove this!)
 var _ = fmt.Fprint
 var _ = os.Stdout
-
-func findExecutable(name string) (string, error) {
-	exe, err := exec.LookPath(name)
-	return exe, err
-
-}
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
@@ -30,29 +23,38 @@ func main() {
 		inp = strings.TrimSpace(inp)
 		tokens := strings.Split(inp, " ")
 		command := tokens[0]
-		if command == "exit" {
+		args := tokens[1:]
+
+		switch command {
+		case "exit":
 			os.Exit(0)
-		} else if command == "echo" {
-			for i := 1; i < len(tokens); i++ {
-				fmt.Printf("%s ", tokens[i])
+
+		case "echo":
+			for i := 0; i < len(args); i++ {
+				fmt.Printf("%s ", args[i])
 			}
 			fmt.Println()
-		} else if command == "type" {
-			if slices.Contains(BuiltinCommands, tokens[1]) {
-				fmt.Printf("%s is a shell builtin\n", tokens[1])
-			} else if fPath, err := findExecutable(tokens[1]); err == nil {
-				fmt.Printf("%s is %s\n", tokens[1], fPath)
-			} else {
-				fmt.Fprintf(os.Stdout, "%s: not found\n", tokens[1])
-			}
-		} else if _, err := findExecutable(command); err == nil {
-			cmd := exec.Command(command, tokens[1:]...)
-			output, err := cmd.CombinedOutput()
+
+		case "type":
+			output, err := handleType(args)
 			if err == nil {
-				fmt.Printf("%s", output)
+				fmt.Println(output)
 			}
-		} else {
-			fmt.Fprintf(os.Stdout, "%s: command not found\n", command)
+		case "pwd":
+			pwd, err := os.Getwd()
+			if err == nil {
+				fmt.Println(pwd)
+			}
+		default:
+			if _, err := findExecutable(command); err == nil {
+				cmd := exec.Command(command, args...)
+				output, err := cmd.CombinedOutput()
+				if err == nil {
+					fmt.Printf("%s", output)
+				}
+			} else {
+				fmt.Fprintf(os.Stdout, "%s: command not found\n", command)
+			}
 		}
 	}
 }
