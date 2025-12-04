@@ -31,7 +31,7 @@ func tokenize(inp string) []string {
 			continue
 		}
 
-		if inp[i] == '\\' && !inDoubleQuotes && !inSingleQuotes {
+		if inp[i] == '\\' && !inSingleQuotes {
 			inEscapeSequence = true
 			continue
 		}
