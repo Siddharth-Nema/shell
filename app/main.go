@@ -93,7 +93,11 @@ func main() {
 		switch command {
 		case "exit":
 			os.Exit(0)
-
+		case "cat":
+			err = handleCat(args)
+			if err != nil {
+				fmt.Println("Error during cat command")
+			}
 		case "echo":
 			for i := 0; i < len(args); i++ {
 				fmt.Printf("%s ", args[i])
