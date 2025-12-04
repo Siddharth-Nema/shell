@@ -18,11 +18,24 @@ func tokenize(inp string) []string {
 	var tokens []string
 	inSingleQuotes := false
 	inDoubleQuotes := false
+	inEscapeSequence := false
 
 	inp = strings.ReplaceAll(inp, "''", "")
 	inp = strings.ReplaceAll(inp, "\"\"", "")
 
 	for i := 0; i < len(inp); i++ {
+
+		if inEscapeSequence {
+			token += string(inp[i])
+			inEscapeSequence = false
+			continue
+		}
+
+		if inp[i] == '\\' {
+			inEscapeSequence = true
+			continue
+		}
+
 		if inp[i] == '\'' && !inDoubleQuotes {
 			if len(token) > 0 {
 				tokens = append(tokens, token)
