@@ -96,7 +96,7 @@ func main() {
 		case "cat":
 			err = handleCat(args)
 			if err != nil {
-				fmt.Println("Error during cat command")
+				fmt.Printf("error: %s", err)
 			}
 		case "echo":
 			for i := 0; i < len(args); i++ {
