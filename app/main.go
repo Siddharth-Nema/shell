@@ -31,7 +31,7 @@ func tokenize(inp string) []string {
 			continue
 		}
 
-		if inp[i] == '\\' {
+		if inp[i] == '\\' && !inDoubleQuotes && !inSingleQuotes {
 			inEscapeSequence = true
 			continue
 		}
@@ -96,7 +96,7 @@ func main() {
 		case "cat":
 			err = handleCat(args)
 			if err != nil {
-				fmt.Printf("error: %s", err)
+				fmt.Printf("error: %s\n", err)
 			}
 		case "echo":
 			for i := 0; i < len(args); i++ {
