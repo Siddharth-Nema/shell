@@ -46,10 +46,6 @@ func tokenize(inp string) []string {
 		}
 
 		if inp[i] == '"' && !inSingleQuotes {
-			if len(token) > 0 {
-				tokens = append(tokens, token)
-				token = ""
-			}
 			inDoubleQuotes = !inDoubleQuotes
 			continue
 		}
