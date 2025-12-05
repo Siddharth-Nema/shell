@@ -14,6 +14,7 @@ var _ = fmt.Fprint
 var _ = os.Stdout
 
 var STDOUT = os.Stdout
+var STDERR = os.Stderr
 
 func tokenize(inp string) []string {
 	var token string
@@ -73,36 +74,48 @@ func tokenize(inp string) []string {
 	return tokens
 }
 
-func getOutputFile(tokens []string) (*os.File, []string) {
-	var filePath string = ""
-	var redirectIndex = -1
+func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
+	var outputFilePath string = ""
+	var errorFilePath string = ""
+	filteredTokens := []string{}
 
-	for index, token := range tokens {
+	for i := 0; i < len(tokens); i++ {
+		token := tokens[i]
 		if token == ">" || token == "1>" {
-			if index+1 < len(tokens) {
-				filePath = tokens[index+1]
-				redirectIndex = index
-				break
+			if i+1 < len(tokens) {
+				outputFilePath = tokens[i+1]
+				i++ // Skip the filename
 			}
+		} else if token == "2>" {
+			if i+1 < len(tokens) {
+				errorFilePath = tokens[i+1]
+				i++ // Skip the filename
+			}
+		} else {
+			filteredTokens = append(filteredTokens, token)
 		}
 	}
 
-	// Filter out redirection tokens from args
-	filteredTokens := tokens
-	if redirectIndex >= 0 {
-		filteredTokens = append(tokens[:redirectIndex], tokens[redirectIndex+2:]...)
-	}
+	var outputFile, errorFile *os.File
 
-	if filePath != "" {
-		f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if outputFilePath != "" {
+		f, err := os.OpenFile(outputFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to open %s: %v\n", filePath, err)
-			return nil, filteredTokens
+			fmt.Fprintf(os.Stderr, "failed to open %s: %v\n", outputFilePath, err)
+		} else {
+			outputFile = f
 		}
-		return f, filteredTokens
+	}
+	if errorFilePath != "" {
+		f, err := os.OpenFile(errorFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to open %s: %v\n", errorFilePath, err)
+		} else {
+			errorFile = f
+		}
 	}
 
-	return nil, filteredTokens
+	return outputFile, errorFile, filteredTokens
 }
 
 func main() {
@@ -120,13 +133,16 @@ func main() {
 			continue
 		}
 
-		outputFile, filteredTokens := getOutputFile(tokens)
+		outputFile, errorFile, filteredTokens := getOutputFiles(tokens)
 		command := filteredTokens[0]
 		args := filteredTokens[1:]
 
 		// Redirect stdout if needed
 		if outputFile != nil {
 			os.Stdout = outputFile
+		}
+		if errorFile != nil {
+			os.Stderr = errorFile
 		}
 
 		switch command {
@@ -189,6 +205,10 @@ func main() {
 		if outputFile != nil {
 			outputFile.Close()
 			os.Stdout = STDOUT
+		}
+		if errorFile != nil {
+			errorFile.Close()
+			os.Stderr = STDERR
 		}
 	}
 }
