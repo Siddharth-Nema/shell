@@ -135,7 +135,11 @@ func main() {
 		case "cat":
 			err = handleCat(args)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "error: %s \n", err)
+				if os.IsNotExist(err) {
+					fmt.Fprintf(os.Stderr, "cat: %s: No such file or directory\n", args[0])
+				} else {
+					fmt.Fprintf(os.Stderr, "cat: %s\n", err)
+				}
 			}
 		case "echo":
 			for i := 0; i < len(args); i++ {
