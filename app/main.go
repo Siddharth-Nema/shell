@@ -203,12 +203,12 @@ func main() {
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				cmd.Stdin = os.Stdin
-				err := cmd.Run() // Use Run() instead of CombinedOutput()
-				if err != nil {
-					if errorFile == nil {
-						fmt.Fprintf(os.Stderr, "%s: command failed: %v\n", command, err)
-					}
-				}
+				cmd.Run()
+				// if err != nil {
+				// 	if errorFile == nil {
+				// 		fmt.Fprintf(os.Stderr, "%s: command failed: %v\n", command, err)
+				// 	}
+				// }
 			} else {
 				fmt.Fprintf(os.Stderr, "%s: command not found\n", command)
 			}
