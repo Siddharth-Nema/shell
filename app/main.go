@@ -135,8 +135,8 @@ func main() {
 		case "cat":
 			err = handleCat(args)
 			if err != nil {
-				if os.IsNotExist(err) {
-					fmt.Fprintf(os.Stderr, "cat: %s: No such file or directory\n", args[0])
+				if pathErr, ok := err.(*os.PathError); ok && os.IsNotExist(pathErr.Err) {
+					fmt.Fprintf(os.Stderr, "cat: %s: No such file or directory\n", pathErr.Path)
 				} else {
 					fmt.Fprintf(os.Stderr, "cat: %s\n", err)
 				}
