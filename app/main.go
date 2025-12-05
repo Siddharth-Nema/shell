@@ -26,11 +26,7 @@ func tokenize(inp string) []string {
 	for i := 0; i < len(inp); i++ {
 
 		if inEscapeSequence {
-			if inp[i] == '"' || inp[i] == '\\' || inp[i] == ' ' {
-				token += string(inp[i])
-			} else {
-				token += "\\" + string(inp[i])
-			}
+			token += string(inp[i])
 			inEscapeSequence = false
 			continue
 		}
