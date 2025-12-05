@@ -79,21 +79,25 @@ func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
 	var errorFilePath string = ""
 	filteredTokens := []string{}
 	var outputMode int = os.O_TRUNC
+	var errorMode int = os.O_TRUNC
 
 	for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
 		if token == ">" || token == "1>" || token == ">>" || token == "1>>" {
 			if i+1 < len(tokens) {
 				outputFilePath = tokens[i+1]
-				i++ // Skip the filename
+				i++
 				if token == ">>" || token == "1>>" {
 					outputMode = os.O_APPEND
 				}
 			}
-		} else if token == "2>" {
+		} else if token == "2>" || token == "2>>" {
 			if i+1 < len(tokens) {
 				errorFilePath = tokens[i+1]
-				i++ // Skip the filename
+				i++
+				if token == "2>>" {
+					errorMode = os.O_APPEND
+				}
 			}
 		} else {
 			filteredTokens = append(filteredTokens, token)
@@ -111,7 +115,7 @@ func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
 		}
 	}
 	if errorFilePath != "" {
-		f, err := os.OpenFile(errorFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		f, err := os.OpenFile(errorFilePath, os.O_WRONLY|os.O_CREATE|errorMode, 0644)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to open %s: %v\n", errorFilePath, err)
 		} else {
