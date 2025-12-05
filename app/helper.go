@@ -44,7 +44,7 @@ func handleCat(files []string) error {
 			defer f.Close()
 			r = f
 		}
-		
+
 		if _, err := io.Copy(os.Stdout, r); err != nil {
 			return err
 		}
