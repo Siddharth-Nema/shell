@@ -192,9 +192,14 @@ func main() {
 		default:
 			if _, err := findExecutable(command); err == nil {
 				cmd := exec.Command(command, args...)
-				output, err := cmd.CombinedOutput()
-				if err == nil {
-					fmt.Printf("%s", output)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				cmd.Stdin = os.Stdin
+				err := cmd.Run() // Use Run() instead of CombinedOutput()
+				if err != nil {
+					if errorFile == nil {
+						fmt.Fprintf(os.Stderr, "%s: command failed: %v\n", command, err)
+					}
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "%s: command not found\n", command)
