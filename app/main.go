@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -145,16 +146,28 @@ func autoComplete(partial string) string {
 }
 
 func main() {
-	if err := keyboard.Open(); err != nil {
-		panic(err)
+	err := keyboard.Open()
+	useKeyboard := err == nil
+	if useKeyboard {
+		defer keyboard.Close()
 	}
-	defer keyboard.Close()
+
+	reader := bufio.NewReader(os.Stdin)
 
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
-		inp, err := readInputWithCompletion()
-		if err != nil {
-			break
+		var inp string
+		if useKeyboard {
+			inp, err = readInputWithCompletion()
+			if err != nil {
+				break
+			}
+		} else {
+			// Fallback to simple reading for non-interactive environments
+			inp, err = reader.ReadString('\n')
+			if err != nil {
+				break
+			}
 		}
 		inp = strings.TrimSpace(inp)
 		tokens := tokenize(inp)
