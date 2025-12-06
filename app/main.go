@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/eiannone/keyboard"
 )
 
 // Ensures gofmt doesn't remove the "fmt" and "os" imports in stage 1 (feel free to remove this!)
@@ -16,64 +17,8 @@ var _ = os.Stdout
 var STDOUT = os.Stdout
 var STDERR = os.Stderr
 
-func tokenize(inp string) []string {
-	var token string
-	var tokens []string
-	inSingleQuotes := false
-	inDoubleQuotes := false
-	inEscapeSequence := false
-
-	for i := 0; i < len(inp); i++ {
-
-		if inEscapeSequence {
-			if inDoubleQuotes {
-				if inp[i] != '"' && inp[i] != '\\' {
-					token += "\\"
-				}
-			}
-			token += string(inp[i])
-			inEscapeSequence = false
-			continue
-		}
-
-		if inp[i] == '\\' && !inSingleQuotes {
-			inEscapeSequence = true
-			continue
-		}
-
-		if inp[i] == '\'' && !inDoubleQuotes {
-			inSingleQuotes = !inSingleQuotes
-			continue
-		}
-
-		if inp[i] == '"' && !inSingleQuotes {
-			inDoubleQuotes = !inDoubleQuotes
-			continue
-		}
-
-		if inp[i] == ' ' {
-			if inSingleQuotes || inDoubleQuotes {
-				token += string(inp[i])
-			} else {
-				if len(token) > 0 {
-					tokens = append(tokens, token)
-					token = ""
-				}
-			}
-
-		} else {
-			token += string(inp[i])
-		}
-	}
-
-	if len(token) > 0 {
-		tokens = append(tokens, token)
-		token = ""
-	}
-
-	return tokens
-}
-
+// getOutputFiles processes redirection operators (>, >>, 2>, 2>>) from tokens and opens the target files.
+// It returns the output file, error file, and a filtered token slice without redirection operators.
 func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
 	var outputFilePath string = ""
 	var errorFilePath string = ""
@@ -126,12 +71,88 @@ func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
 	return outputFile, errorFile, filteredTokens
 }
 
+func readInputWithCompletion() (string, error) {
+	var input string
+
+	for {
+		char, key, err := keyboard.GetSingleKey()
+		if err != nil {
+			return "", err
+		}
+
+		switch key {
+		case keyboard.KeyEnter:
+			fmt.Println()
+			return input, nil
+
+		case keyboard.KeyTab:
+			// 	// Auto-completion logic
+			completed := autoComplete(input)
+			if completed != input {
+				// Clear current line and print completed
+				fmt.Print("\r$ " + completed)
+				input = completed
+			}
+
+		case keyboard.KeyBackspace, keyboard.KeyBackspace2:
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				fmt.Print("\b \b") // Erase character
+			}
+
+		case keyboard.KeyCtrlC:
+			return "", fmt.Errorf("interrupted")
+
+		case keyboard.KeySpace:
+			// Handle space explicitly
+			input += " "
+			fmt.Print(" ")
+
+		default:
+			if char != 0 && char >= 32 && char <= 126 {
+				// Only printable ASCII characters
+				input += string(char)
+				fmt.Print(string(char))
+			}
+		}
+	}
+}
+
+func autoComplete(partial string) string {
+	tokens := tokenize(partial)
+	lastToken := tokens[0]
+
+	if len(tokens) == 0 {
+		return partial
+	}
+	matches := []string{}
+
+	if len(tokens) == 1 {
+		for _, cmd := range BuiltinCommands {
+			if strings.HasPrefix(cmd, lastToken) {
+				matches = append(matches, cmd)
+			}
+		}
+	}
+
+	if len(matches) == 1 {
+		tokens[len(tokens)-1] = matches[0]
+		return strings.Join(tokens, " ") + " "
+	}
+
+	return partial
+
+}
+
 func main() {
-	reader := bufio.NewReader(os.Stdin)
+	if err := keyboard.Open(); err != nil {
+		panic(err)
+	}
+	defer keyboard.Close()
 
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
-		inp, err := reader.ReadString('\n')
+		inp, err := readInputWithCompletion()
 		if err != nil {
 			break
 		}
@@ -145,7 +166,6 @@ func main() {
 		command := filteredTokens[0]
 		args := filteredTokens[1:]
 
-		// Redirect stdout if needed
 		if outputFile != nil {
 			os.Stdout = outputFile
 		}
@@ -204,17 +224,11 @@ func main() {
 				cmd.Stderr = os.Stderr
 				cmd.Stdin = os.Stdin
 				cmd.Run()
-				// if err != nil {
-				// 	if errorFile == nil {
-				// 		fmt.Fprintf(os.Stderr, "%s: command failed: %v\n", command, err)
-				// 	}
-				// }
 			} else {
 				fmt.Fprintf(os.Stderr, "%s: command not found\n", command)
 			}
 		}
 
-		// Restore stdout after command execution
 		if outputFile != nil {
 			outputFile.Close()
 			os.Stdout = STDOUT
