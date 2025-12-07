@@ -145,35 +145,60 @@ func autoComplete(partial string) string {
 
 }
 
-func main() {
-	err := keyboard.Open()
-	useKeyboard := err == nil
-	if useKeyboard {
-		defer keyboard.Close()
+func isStdinTerminal() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
 	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
 
+func main() {
+	if os.Getenv("TERM") == "" {
+		_ = os.Setenv("TERM", "xterm-256color")
+	}
+	useKeyboard := false
+	if isStdinTerminal() {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+				}
+			}()
+			if err := keyboard.Open(); err == nil {
+				useKeyboard = true
+			}
+		}()
+		if useKeyboard {
+			defer keyboard.Close()
+		}
+	}
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 		var inp string
+		var err error
+
 		if useKeyboard {
 			inp, err = readInputWithCompletion()
 			if err != nil {
-				break
+				return
 			}
 		} else {
 			inp, err = reader.ReadString('\n')
 			if err != nil {
-				break
+				return
 			}
 			if strings.Contains(inp, "\t") {
-				beforeTab := strings.Split(inp, "\t")[0]
-				completed := autoComplete(beforeTab)
-				fmt.Print("\r$ " + completed)
-				inp = completed + "\n"
+				before := strings.Split(inp, "\t")[0]
+				comp := autoComplete(before)
+				fmt.Printf("\r$ %s", comp)
+				inp = comp + "\n"
+			} else {
+				fmt.Printf("\r$ %s", strings.TrimRight(inp, "\n"))
 			}
 		}
+
 		inp = strings.TrimSpace(inp)
 		tokens := tokenize(inp)
 		if len(tokens) == 0 {
