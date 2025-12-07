@@ -3,12 +3,13 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/eiannone/keyboard"
+	"github.com/chzyer/readline"
 )
 
 // Ensures gofmt doesn't remove the "fmt" and "os" imports in stage 1 (feel free to remove this!)
@@ -72,52 +73,52 @@ func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
 	return outputFile, errorFile, filteredTokens
 }
 
-func readInputWithCompletion() (string, error) {
-	var input string
+// func readInputWithCompletion() (string, error) {
+// 	var input string
 
-	for {
-		char, key, err := keyboard.GetSingleKey()
-		if err != nil {
-			return "", err
-		}
+// 	for {
+// 		char, key, err := keyboard.GetSingleKey()
+// 		if err != nil {
+// 			return "", err
+// 		}
 
-		switch key {
-		case keyboard.KeyEnter:
-			fmt.Println()
-			return input, nil
+// 		switch key {
+// 		case keyboard.KeyEnter:
+// 			fmt.Println()
+// 			return input, nil
 
-		case keyboard.KeyTab:
-			// 	// Auto-completion logic
-			completed := autoComplete(input)
-			if completed != input {
-				// Clear current line and print completed
-				fmt.Print("\r$ " + completed)
-				input = completed
-			}
+// 		case keyboard.KeyTab:
+// 			// 	// Auto-completion logic
+// 			completed := autoComplete(input)
+// 			if completed != input {
+// 				// Clear current line and print completed
+// 				fmt.Print("\r$ " + completed)
+// 				input = completed
+// 			}
 
-		case keyboard.KeyBackspace, keyboard.KeyBackspace2:
-			if len(input) > 0 {
-				input = input[:len(input)-1]
-				fmt.Print("\b \b") // Erase character
-			}
+// 		case keyboard.KeyBackspace, keyboard.KeyBackspace2:
+// 			if len(input) > 0 {
+// 				input = input[:len(input)-1]
+// 				fmt.Print("\b \b") // Erase character
+// 			}
 
-		case keyboard.KeyCtrlC:
-			return "", fmt.Errorf("interrupted")
+// 		case keyboard.KeyCtrlC:
+// 			return "", fmt.Errorf("interrupted")
 
-		case keyboard.KeySpace:
-			// Handle space explicitly
-			input += " "
-			fmt.Print(" ")
+// 		case keyboard.KeySpace:
+// 			// Handle space explicitly
+// 			input += " "
+// 			fmt.Print(" ")
 
-		default:
-			if char != 0 && char >= 32 && char <= 126 {
-				// Only printable ASCII characters
-				input += string(char)
-				fmt.Print(string(char))
-			}
-		}
-	}
-}
+// 		default:
+// 			if char != 0 && char >= 32 && char <= 126 {
+// 				// Only printable ASCII characters
+// 				input += string(char)
+// 				fmt.Print(string(char))
+// 			}
+// 		}
+// 	}
+// }
 
 func autoComplete(partial string) string {
 	tokens := tokenize(partial)
@@ -140,9 +141,16 @@ func autoComplete(partial string) string {
 		tokens[len(tokens)-1] = matches[0]
 		return strings.Join(tokens, " ") + " "
 	}
-
 	return partial
 
+}
+
+func makeCompleter() *readline.PrefixCompleter {
+	items := make([]readline.PrefixCompleterInterface, 0, len(BuiltinCommands))
+	for _, c := range BuiltinCommands {
+		items = append(items, readline.PcItem(c))
+	}
+	return readline.NewPrefixCompleter(items...)
 }
 
 func isStdinTerminal() bool {
@@ -154,37 +162,43 @@ func isStdinTerminal() bool {
 }
 
 func main() {
-	if os.Getenv("TERM") == "" {
-		_ = os.Setenv("TERM", "xterm-256color")
-	}
-	useKeyboard := false
+	useReadline := false
+	var rl *readline.Instance
 	if isStdinTerminal() {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-				}
-			}()
-			if err := keyboard.Open(); err == nil {
-				useKeyboard = true
-			}
-		}()
-		if useKeyboard {
-			defer keyboard.Close()
+		config := &readline.Config{
+			Prompt:          "$ ",
+			AutoComplete:    makeCompleter(),
+			InterruptPrompt: "^C",
+			EOFPrompt:       "exit",
+		}
+		var err error
+		rl, err = readline.NewEx(config)
+		if err == nil {
+			useReadline = true
+			defer rl.Close()
 		}
 	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
 		fmt.Fprint(os.Stdout, "$ ")
 		var inp string
 		var err error
-
-		if useKeyboard {
-			inp, err = readInputWithCompletion()
-			if err != nil {
+		if useReadline {
+			line, errRead := rl.Readline()
+			if errRead == readline.ErrInterrupt {
+				continue
+			}
+			if errRead == io.EOF {
 				return
 			}
+			if errRead != nil {
+				return
+			}
+			inp = line
 		} else {
+			fmt.Fprint(os.Stdout, "$ ")
 			inp, err = reader.ReadString('\n')
 			if err != nil {
 				return
