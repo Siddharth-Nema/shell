@@ -163,10 +163,15 @@ func main() {
 				break
 			}
 		} else {
-			// Fallback to simple reading for non-interactive environments
 			inp, err = reader.ReadString('\n')
 			if err != nil {
 				break
+			}
+			if strings.Contains(inp, "\t") {
+				beforeTab := strings.Split(inp, "\t")[0]
+				completed := autoComplete(beforeTab)
+				fmt.Print("\r$ " + completed)
+				inp = completed + "\n"
 			}
 		}
 		inp = strings.TrimSpace(inp)
