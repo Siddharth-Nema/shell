@@ -43,7 +43,7 @@ func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			// convert prefix length to rune count correctly
 			// prefixLen is the number of runes already present
 			prefixLen := len([]rune(prefix))
-			cmdRunes := []rune(cmd)
+			cmdRunes := []rune(cmd + " ")
 			// append the remainder of cmd after the prefix
 			out = append(out, cmdRunes[prefixLen:])
 		}
