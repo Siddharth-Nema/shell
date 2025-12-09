@@ -146,6 +146,10 @@ func autoComplete(partial string) string {
 }
 
 func makeCompleter() *CommandsCompleter {
+	pathCmds, err := FindExecutablesInPath()
+	if err == nil {
+		BuiltinCommands = append(BuiltinCommands, pathCmds...)
+	}
 	completer := &CommandsCompleter{
 		Commands:        BuiltinCommands,
 		CaseInsensitive: true,
@@ -164,6 +168,7 @@ func isStdinTerminal() bool {
 func main() {
 	useReadline := false
 	var rl *readline.Instance
+
 	if isStdinTerminal() {
 		config := &readline.Config{
 			Prompt:          "$ ",

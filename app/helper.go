@@ -4,7 +4,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"slices"
+	"strings"
 )
 
 // findExecutable searches for an executable named 'name' in the directories named by the PATH environment variable.
@@ -115,4 +118,57 @@ func tokenize(inp string) []string {
 	}
 
 	return tokens
+}
+
+// FindExecutablesInPath returns the names (not full paths)
+// of executables in PATH that start with the given prefix.
+func FindExecutablesInPath() ([]string, error) {
+	pathEnv := os.Getenv("PATH")
+	if pathEnv == "" {
+		return nil, nil
+	}
+
+	paths := filepath.SplitList(pathEnv)
+	results := []string{}
+	seen := make(map[string]bool) // avoid duplicates
+
+	isWindows := runtime.GOOS == "windows"
+
+	for _, dir := range paths {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue // skip unreadable dirs
+		}
+
+		for _, entry := range entries {
+			name := entry.Name()
+
+			// determine executability
+			if isWindows {
+				// allowed Windows executable extensions
+				ext := strings.ToLower(filepath.Ext(name))
+				if ext != ".exe" && ext != ".bat" && ext != ".cmd" && ext != ".com" && ext != ".ps1" {
+					continue
+				}
+			} else {
+				// check Unix exec bit
+				info, err := entry.Info()
+				if err != nil {
+					continue
+				}
+				mode := info.Mode()
+				if mode&0111 == 0 { // executable for user/group/other
+					continue
+				}
+			}
+
+			// avoid duplicates caused by repeated PATH dirs
+			if !seen[name] {
+				seen[name] = true
+				results = append(results, name)
+			}
+		}
+	}
+
+	return results, nil
 }
