@@ -146,12 +146,14 @@ func autoComplete(partial string) string {
 }
 
 func makeCompleter() *CommandsCompleter {
+	var cmds []string
+	cmds = append(cmds, BuiltinCommands...)
 	pathCmds, err := FindExecutablesInPath()
 	if err == nil {
-		BuiltinCommands = append(BuiltinCommands, pathCmds...)
+		cmds = append(cmds, pathCmds...)
 	}
 	completer := &CommandsCompleter{
-		Commands:        BuiltinCommands,
+		Commands:        cmds,
 		CaseInsensitive: true,
 	}
 	return completer
