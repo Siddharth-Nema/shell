@@ -145,12 +145,12 @@ func autoComplete(partial string) string {
 
 }
 
-func makeCompleter() *readline.PrefixCompleter {
-	items := make([]readline.PrefixCompleterInterface, 0, len(BuiltinCommands))
-	for _, c := range BuiltinCommands {
-		items = append(items, readline.PcItem(c))
+func makeCompleter() *CommandsCompleter {
+	completer := &CommandsCompleter{
+		Commands:        BuiltinCommands,
+		CaseInsensitive: true,
 	}
-	return readline.NewPrefixCompleter(items...)
+	return completer
 }
 
 func isStdinTerminal() bool {
@@ -182,7 +182,6 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		fmt.Fprint(os.Stdout, "$ ")
 		var inp string
 		var err error
 		if useReadline {
