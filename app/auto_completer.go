@@ -83,7 +83,9 @@ func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 				fmt.Printf("%s ", prefix+string(suggestion))
 			}
 			fmt.Println()
-			fmt.Printf("$ %s", prefix)
+			originalLine := string(line)
+			originalLine = strings.ReplaceAll(originalLine, "\a", "")
+			fmt.Printf("$ %s", originalLine)
 			out = nil
 			return out, len(prefixRunes)
 		}
