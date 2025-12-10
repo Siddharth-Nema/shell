@@ -155,6 +155,7 @@ func makeCompleter() *CommandsCompleter {
 	completer := &CommandsCompleter{
 		Commands:        cmds,
 		CaseInsensitive: true,
+		noOfTabs:        0,
 	}
 	return completer
 }
@@ -220,6 +221,7 @@ func main() {
 		}
 
 		inp = strings.TrimSpace(inp)
+		inp = strings.ReplaceAll(inp, "\a", "")
 		tokens := tokenize(inp)
 		if len(tokens) == 0 {
 			continue

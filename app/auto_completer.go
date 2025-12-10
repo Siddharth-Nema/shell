@@ -1,11 +1,15 @@
 package main
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // CommandsCompleter completes from a provided list of commands/words.
 type CommandsCompleter struct {
 	Commands        []string
 	CaseInsensitive bool
+	noOfTabs        int
 }
 
 // Do implements readline.AutoCompleter.
@@ -15,6 +19,7 @@ type CommandsCompleter struct {
 // - suggestions as [][]rune (each suggestion must be the suffix to insert)
 // - length: number of runes already shared (the prefix length)
 func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
+	c.noOfTabs++
 	// find start of current token (space-separated)
 	start := pos
 	for start > 0 {
@@ -28,6 +33,8 @@ func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	// prefix is what user has typed for this token
 	prefixRunes := line[start:pos]
 	prefix := string(prefixRunes)
+	prefix = strings.ReplaceAll(prefix, "\a", "")
+
 	if c.CaseInsensitive {
 		prefix = strings.ToLower(prefix)
 	}
@@ -48,7 +55,24 @@ func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			out = append(out, cmdRunes[prefixLen:])
 		}
 	}
-	if len(out) > 0 {
+	if len(out) > 1 {
+
+		if c.noOfTabs < 2 {
+			out = nil
+			out = append(out, []rune("\a"))
+			return out, len(prefixRunes)
+		} else {
+			c.noOfTabs = 0
+			fmt.Println()
+			for _, suggestion := range out {
+				fmt.Printf("%s ", prefix+string(suggestion))
+			}
+			fmt.Println()
+			fmt.Printf("$ %s", prefix)
+			out = nil
+			return out, len(prefixRunes)
+		}
+	} else if len(out) == 1 {
 		// length should be how many runes are already shared (prefix length)
 		return out, len(prefixRunes)
 	} else {
