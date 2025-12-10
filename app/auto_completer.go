@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -55,8 +56,22 @@ func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			out = append(out, cmdRunes[prefixLen:])
 		}
 	}
-	if len(out) > 1 {
 
+	sort.Slice(out, func(i, j int) bool {
+		// First, compare by length of the inner rune slices
+		if len(out[i]) != len(out[j]) {
+			return len(out[i]) < len(out[j])
+		}
+		// If lengths are equal, compare lexicographically
+		for k := 0; k < len(out[i]); k++ {
+			if out[i][k] != out[j][k] {
+				return out[i][k] < out[j][k]
+			}
+		}
+		return false // They are equal
+	})
+
+	if len(out) > 1 {
 		if c.noOfTabs < 2 {
 			out = nil
 			out = append(out, []rune("\a"))
