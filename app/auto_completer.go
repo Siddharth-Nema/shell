@@ -87,6 +87,7 @@ func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			fmt.Println()
 			fmt.Printf("$ %s", string(line))
 			out = nil
+			out = append(out, lcp)
 			return out, len(prefixRunes)
 		}
 	} else if len(out) == 1 {
