@@ -22,6 +22,9 @@ type CommandsCompleter struct {
 func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	c.noOfTabs++
 	// find start of current token (space-separated)
+	temp := string(line)
+	temp = strings.ReplaceAll(temp, "\a", "")
+	line = []rune(temp)
 	start := pos
 	for start > 0 {
 		r := line[start-1]
@@ -34,7 +37,6 @@ func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	// prefix is what user has typed for this token
 	prefixRunes := line[start:pos]
 	prefix := string(prefixRunes)
-	prefix = strings.ReplaceAll(prefix, "\a", "")
 
 	if c.CaseInsensitive {
 		prefix = strings.ToLower(prefix)
