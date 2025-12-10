@@ -185,3 +185,39 @@ func removeDuplicateStrings(slice []string) []string {
 	}
 	return result
 }
+
+// LongestCommonPrefixRunes returns the longest common prefix of a slice of
+// rune slices ([]rune). If the input is empty, it returns nil.
+func LongestCommonPrefixRunes(items [][]rune) []rune {
+	if len(items) == 0 {
+		return nil
+	}
+
+	prefix := items[0]
+
+	for i := 1; i < len(items); i++ {
+		prefix = lcpRunesTwo(prefix, items[i])
+		if len(prefix) == 0 {
+			return nil
+		}
+	}
+
+	// Return a copy so modifying the result doesn’t modify the original input
+	out := make([]rune, len(prefix))
+	copy(out, prefix)
+	return out
+}
+
+// lcpRunesTwo returns the LCP of two rune slices.
+func lcpRunesTwo(a, b []rune) []rune {
+	minLen := len(a)
+	if len(b) < minLen {
+		minLen = len(b)
+	}
+
+	i := 0
+	for i < minLen && a[i] == b[i] {
+		i++
+	}
+	return a[:i]
+}

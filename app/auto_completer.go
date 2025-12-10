@@ -72,9 +72,11 @@ func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	})
 
 	if len(out) > 1 {
+		lcp := LongestCommonPrefixRunes(out)
 		if c.noOfTabs < 2 {
 			out = nil
-			out = append(out, []rune("\a"))
+			out = append(out, lcp)
+			fmt.Print("\a")
 			return out, len(prefixRunes)
 		} else {
 			c.noOfTabs = 0
@@ -91,7 +93,7 @@ func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		// length should be how many runes are already shared (prefix length)
 		return out, len(prefixRunes)
 	} else {
-		out = append(out, []rune("\a"))
+		fmt.Print("\a")
 		return out, len(prefixRunes)
 	}
 
