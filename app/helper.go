@@ -172,3 +172,16 @@ func FindExecutablesInPath() ([]string, error) {
 
 	return results, nil
 }
+
+func removeDuplicateStrings(slice []string) []string {
+	encountered := map[string]bool{} // Map to store encountered strings
+	result := []string{}             // Slice to store unique strings
+
+	for _, str := range slice {
+		if !encountered[str] { // If the string has not been encountered before
+			encountered[str] = true      // Mark it as encountered
+			result = append(result, str) // Add it to the result slice
+		}
+	}
+	return result
+}

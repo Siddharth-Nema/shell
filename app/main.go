@@ -152,6 +152,7 @@ func makeCompleter() *CommandsCompleter {
 	if err == nil {
 		cmds = append(cmds, pathCmds...)
 	}
+	cmds = removeDuplicateStrings(cmds)
 	completer := &CommandsCompleter{
 		Commands:        cmds,
 		CaseInsensitive: true,
