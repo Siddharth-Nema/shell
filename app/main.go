@@ -157,6 +157,7 @@ func makeCompleter() *CommandsCompleter {
 		Commands:        cmds,
 		CaseInsensitive: true,
 		noOfTabs:        0,
+		prevLine:        []rune(""),
 	}
 	return completer
 }

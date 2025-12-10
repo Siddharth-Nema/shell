@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -11,6 +12,7 @@ type CommandsCompleter struct {
 	Commands        []string
 	CaseInsensitive bool
 	noOfTabs        int
+	prevLine        []rune
 }
 
 // Do implements readline.AutoCompleter.
@@ -20,11 +22,18 @@ type CommandsCompleter struct {
 // - suggestions as [][]rune (each suggestion must be the suffix to insert)
 // - length: number of runes already shared (the prefix length)
 func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
-	c.noOfTabs++
 	// find start of current token (space-separated)
 	temp := string(line)
 	temp = strings.ReplaceAll(temp, "\a", "")
 	line = []rune(temp)
+
+	if slices.Equal(line, c.prevLine) {
+		c.noOfTabs++
+	} else {
+		c.noOfTabs = 1
+	}
+	c.prevLine = line
+
 	start := pos
 	for start > 0 {
 		r := line[start-1]
@@ -75,6 +84,7 @@ func (c *CommandsCompleter) Do(line []rune, pos int) ([][]rune, int) {
 
 	if len(out) > 1 {
 		lcp := LongestCommonPrefixRunes(out)
+		//fmt.Println(string(lcp))
 		if c.noOfTabs < 2 {
 			out = nil
 			out = append(out, lcp)
