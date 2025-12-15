@@ -126,10 +126,8 @@ func handleCommand(command string, args []string, stdin io.Reader, stdout io.Wri
 	case "cat":
 		return handleCatWithIO(args, stdin, stdout, stderr)
 	case "echo":
-		for i := 0; i < len(args); i++ {
-			fmt.Fprintf(stdout, "%s ", args[i])
-		}
-		fmt.Fprintln(stdout)
+		output := strings.Join(args, " ")
+		fmt.Fprintln(stdout, output)
 		return nil
 
 	case "type":
