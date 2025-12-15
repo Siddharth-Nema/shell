@@ -228,19 +228,20 @@ func runPipeline(cmds [][]string) error {
 		processes[i] = pc
 	}
 
-	// Execute all commands
-	errChan := make(chan error, n)
+	// Start all commands first
+	type startedCmd struct {
+		pc  pipeCmd
+		cmd *exec.Cmd // nil for builtins
+	}
+
+	started := make([]startedCmd, 0, n)
 
 	for _, pc := range processes {
 		if isBuiltin(pc.command) {
-			// Run builtin in goroutine
-			go func(p pipeCmd) {
-				err := handleBuiltin(p.command, p.args, p.stdin, p.stdout, p.stderr)
-				p.stdout.Close()
-				errChan <- err
-			}(pc)
+			// Builtin - will run in goroutine later
+			started = append(started, startedCmd{pc: pc, cmd: nil})
 		} else {
-			// External command
+			// External command - start it now
 			if _, err := findExecutable(pc.command); err == nil {
 				cmd := exec.Command(pc.command, pc.args...)
 				cmd.Stdin = pc.stdin
@@ -248,28 +249,44 @@ func runPipeline(cmds [][]string) error {
 				cmd.Stderr = pc.stderr
 
 				if err := cmd.Start(); err != nil {
-					pc.stdout.Close()
-					errChan <- fmt.Errorf("start failed for %s: %w", pc.command, err)
-					continue
+					return fmt.Errorf("start failed for %s: %w", pc.command, err)
 				}
 
-				// Close stdout pipe immediately after starting
-				pc.stdout.Close()
-
-				// Wait for command in goroutine
-				go func(c *exec.Cmd) {
-					errChan <- c.Wait()
-				}(cmd)
+				started = append(started, startedCmd{pc: pc, cmd: cmd})
 			} else {
-				pc.stdout.Close()
-				go func(err error) {
-					errChan <- err
-				}(fmt.Errorf("%s: command not found", pc.command))
+				return fmt.Errorf("%s: command not found", pc.command)
 			}
 		}
 	}
 
-	// Wait for all commands
+	// Close all write ends of pipes after starting (only for external commands)
+	for _, sc := range started {
+		if sc.cmd != nil {
+			// Only close for external commands that have already started
+			sc.pc.stdout.Close()
+		}
+	}
+
+	// Now wait for all commands
+	errChan := make(chan error, n)
+
+	for _, sc := range started {
+		if sc.cmd == nil {
+			// Builtin - run in goroutine
+			go func(p pipeCmd) {
+				err := handleBuiltin(p.command, p.args, p.stdin, p.stdout, p.stderr)
+				p.stdout.Close() // Close after execution
+				errChan <- err
+			}(sc.pc)
+		} else {
+			// External - wait in goroutine
+			go func(c *exec.Cmd) {
+				errChan <- c.Wait()
+			}(sc.cmd)
+		}
+	}
+
+	// Wait for all commands to complete
 	var firstErr error
 	for i := 0; i < n; i++ {
 		if err := <-errChan; err != nil && firstErr == nil {
