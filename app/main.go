@@ -228,16 +228,43 @@ func runPipeline(cmds [][]string) error {
 		processes[i] = pc
 	}
 
-	// Execute all commands (builtins and external)
+	// Execute all commands
 	errChan := make(chan error, n)
 
 	for _, pc := range processes {
-		// Run builtin in goroutine
-		go func(p pipeCmd) {
-			err := handleCommand(p.command, p.args, p.stdin, p.stdout, p.stderr)
-			p.stdout.Close()
-			errChan <- err
-		}(pc)
+		if isBuiltin(pc.command) {
+			// Run builtin in goroutine
+			go func(p pipeCmd) {
+				err := handleBuiltin(p.command, p.args, p.stdin, p.stdout, p.stderr)
+				p.stdout.Close()
+				errChan <- err
+			}(pc)
+		} else {
+			// External command
+			if _, err := findExecutable(pc.command); err == nil {
+				cmd := exec.Command(pc.command, pc.args...)
+				cmd.Stdin = pc.stdin
+				cmd.Stdout = pc.stdout
+				cmd.Stderr = pc.stderr
+
+				if err := cmd.Start(); err != nil {
+					pc.stdout.Close()
+					errChan <- fmt.Errorf("start failed for %s: %w", pc.command, err)
+					continue
+				}
+
+				// Close stdout pipe immediately after starting
+				pc.stdout.Close()
+
+				// Wait for command in goroutine
+				go func(c *exec.Cmd) {
+					errChan <- c.Wait()
+				}(cmd)
+			} else {
+				pc.stdout.Close()
+				errChan <- fmt.Errorf("%s: command not found", pc.command)
+			}
+		}
 	}
 
 	// Wait for all commands
@@ -257,6 +284,64 @@ type nopWriteCloser struct {
 }
 
 func (nopWriteCloser) Close() error { return nil }
+
+// isBuiltin checks if a command is a shell builtin
+func isBuiltin(command string) bool {
+	switch command {
+	case "exit", "cd", "echo", "type", "pwd", "cat":
+		return true
+	default:
+		return false
+	}
+}
+
+// handleBuiltin executes builtin commands with custom I/O
+func handleBuiltin(command string, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+	switch command {
+	case "exit":
+		os.Exit(0)
+		return nil
+	case "cat":
+		return handleCatWithIO(args, stdin, stdout, stderr)
+	case "echo":
+		output := strings.Join(args, " ")
+		fmt.Fprintln(stdout, output)
+		return nil
+	case "type":
+		output, err := handleType(args)
+		if err == nil {
+			fmt.Fprintln(stdout, output)
+		}
+		return err
+	case "pwd":
+		pwd, err := os.Getwd()
+		if err == nil {
+			fmt.Fprintln(stdout, pwd)
+		}
+		return err
+	case "cd":
+		if len(args) > 0 {
+			var newDir string
+			var err error
+			if args[0] == "~" {
+				newDir, err = os.UserHomeDir()
+				if err != nil {
+					return err
+				}
+			} else {
+				newDir = args[0]
+			}
+			err = os.Chdir(newDir)
+			if err != nil {
+				fmt.Fprintf(stderr, "cd: %s: No such file or directory\n", newDir)
+			}
+			return err
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown builtin: %s", command)
+	}
+}
 
 func main() {
 	useReadline := false
