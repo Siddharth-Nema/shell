@@ -186,7 +186,7 @@ func runPipeline(cmds [][]string) error {
 
 	for i, argv := range cmds {
 		if len(argv) == 0 {
-			return fmt.Errorf("empty command at index %d", i)
+			return fmt.Errorf("Empty command at index %d", i)
 		}
 
 		pc := pipeCmd{
