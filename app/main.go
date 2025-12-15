@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -119,61 +118,61 @@ func isStdinTerminal() bool {
 	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
-func handleCommand(command string, args []string) {
-	var err error
+func handleCommand(command string, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 	switch command {
 	case "exit":
 		os.Exit(0)
+		return nil
 	case "cat":
-		err = handleCat(args)
-		if err != nil {
-			if pathErr, ok := err.(*os.PathError); ok && os.IsNotExist(pathErr.Err) {
-				fmt.Fprintf(os.Stderr, "cat: %s: No such file or directory\n", pathErr.Path)
-			} else {
-				fmt.Fprintf(os.Stderr, "cat: %s\n", err)
-			}
-		}
+		return handleCatWithIO(args, stdin, stdout, stderr)
 	case "echo":
 		for i := 0; i < len(args); i++ {
-			fmt.Printf("%s ", args[i])
+			fmt.Fprintf(stdout, "%s ", args[i])
 		}
-		fmt.Println()
+		fmt.Fprintln(stdout)
+		return nil
 
 	case "type":
 		output, err := handleType(args)
 		if err == nil {
-			fmt.Println(output)
+			fmt.Fprintln(stdout, output)
 		}
+		return err
 	case "pwd":
 		pwd, err := os.Getwd()
 		if err == nil {
-			fmt.Println(pwd)
+			fmt.Fprintln(stdout, pwd)
 		}
+		return err
 	case "cd":
 		if len(args) > 0 {
 			var newDir string
+			var err error
 			if args[0] == "~" {
 				newDir, err = os.UserHomeDir()
 				if err != nil {
-					log.Fatal(err)
+					return err
 				}
 			} else {
 				newDir = args[0]
 			}
-			err := os.Chdir(newDir)
+			err = os.Chdir(newDir)
 			if err != nil {
-				fmt.Printf("cd: %s: No such file or directory\n", newDir)
+				fmt.Fprintf(stderr, "cd: %s: No such file or directory\n", newDir)
 			}
+			return err
 		}
+		return nil
 	default:
 		if _, err := findExecutable(command); err == nil {
 			cmd := exec.Command(command, args...)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Stdin = os.Stdin
-			cmd.Run()
+			cmd.Stdout = stdout
+			cmd.Stderr = stderr // ✅ Use stderr parameter, not os.Stderr
+			cmd.Stdin = stdin
+			return cmd.Run() // ✅ Return the error
 		} else {
-			fmt.Fprintf(os.Stderr, "%s: command not found\n", command)
+			fmt.Fprintf(stderr, "%s: command not found\n", command) // ✅ Use stderr parameter
+			return fmt.Errorf("command not found: %s", command)     // ✅ Return error
 		}
 	}
 }
@@ -184,7 +183,7 @@ func runPipeline(cmds [][]string) error {
 		return nil
 	}
 
-	procs := make([]*exec.Cmd, 0, n)
+	processes := make([]pipeCmd, n)
 	var prevRd *os.File
 
 	for i, argv := range cmds {
@@ -192,12 +191,19 @@ func runPipeline(cmds [][]string) error {
 			return fmt.Errorf("empty command at index %d", i)
 		}
 
-		cmd := exec.Command(argv[0], argv[1:]...)
+		pc := pipeCmd{
+			command: argv[0],
+			args:    []string{},
+			stderr:  os.Stderr,
+		}
+		if len(argv) > 1 {
+			pc.args = argv[1:]
+		}
 
 		if prevRd != nil {
-			cmd.Stdin = prevRd
+			pc.stdin = prevRd
 		} else {
-			cmd.Stdin = os.Stdin
+			pc.stdin = os.Stdin
 		}
 
 		if i < n-1 {
@@ -208,49 +214,51 @@ func runPipeline(cmds [][]string) error {
 				}
 				return fmt.Errorf("pipe creation failed: %w", err)
 			}
-			cmd.Stdout = w
+			pc.stdout = w
 
 			if prevRd != nil {
 				prevRd.Close()
 			}
-
-			if err := cmd.Start(); err != nil {
-				w.Close()
-				r.Close()
-				return fmt.Errorf("start failed for %v: %w", argv, err)
-			}
-
-			w.Close()
 			prevRd = r
 		} else {
-			cmd.Stdout = os.Stdout
-
-			if err := cmd.Start(); err != nil {
-				if prevRd != nil {
-					prevRd.Close()
-				}
-				return fmt.Errorf("start failed for %v: %w", argv, err)
-			}
-
+			pc.stdout = nopWriteCloser{os.Stdout}
 			if prevRd != nil {
-				prevRd.Close()
-				prevRd = nil
+				defer prevRd.Close()
 			}
 		}
 
-		cmd.Stderr = os.Stderr
-		procs = append(procs, cmd)
+		processes[i] = pc
 	}
 
+	// Execute all commands (builtins and external)
+	errChan := make(chan error, n)
+
+	for _, pc := range processes {
+		// Run builtin in goroutine
+		go func(p pipeCmd) {
+			err := handleCommand(p.command, p.args, p.stdin, p.stdout, p.stderr)
+			p.stdout.Close()
+			errChan <- err
+		}(pc)
+	}
+
+	// Wait for all commands
 	var firstErr error
-	for _, cmd := range procs {
-		if err := cmd.Wait(); err != nil && firstErr == nil {
+	for i := 0; i < n; i++ {
+		if err := <-errChan; err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
 
 	return firstErr
 }
+
+// nopWriteCloser wraps a Writer to add a no-op Close method
+type nopWriteCloser struct {
+	io.Writer
+}
+
+func (nopWriteCloser) Close() error { return nil }
 
 func main() {
 	useReadline := false
@@ -309,11 +317,9 @@ func main() {
 			continue
 		}
 
-		// Tokenize and handle redirections
 		tokens := tokenize(inp)
 		outputFile, errorFile, filteredTokens := getOutputFiles(tokens)
 
-		// ✅ APPLY REDIRECTIONS
 		if outputFile != nil {
 			os.Stdout = outputFile
 		}
@@ -352,19 +358,7 @@ func main() {
 			continue
 		}
 
-		// ✅ CHECK IF SINGLE COMMAND OR PIPELINE
-		if len(commands) == 1 {
-			// Single command - use handleCommand for builtins
-			command := commands[0][0]
-			args := []string{}
-			if len(commands[0]) > 1 {
-				args = commands[0][1:]
-			}
-			handleCommand(command, args)
-		} else {
-			// Pipeline - use runPipeline
-			runPipeline(commands)
-		}
+		runPipeline(commands)
 
 		// ✅ RESTORE STDOUT/STDERR
 		if outputFile != nil {

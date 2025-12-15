@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -220,4 +221,35 @@ func lcpRunesTwo(a, b []rune) []rune {
 		i++
 	}
 	return a[:i]
+}
+
+// handleCatWithIO implements cat with custom I/O streams for use in pipelines.
+func handleCatWithIO(files []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+	if len(files) == 0 {
+		// Read from stdin
+		_, err := io.Copy(stdout, stdin)
+		return err
+	}
+
+	for _, path := range files {
+		var r io.Reader
+		if path == "-" {
+			r = stdin
+		} else {
+			f, err := os.Open(path)
+			if err != nil {
+				if pathErr, ok := err.(*os.PathError); ok && os.IsNotExist(pathErr.Err) {
+					fmt.Fprintf(stderr, "cat: %s: No such file or directory\n", pathErr.Path)
+				}
+				return err
+			}
+			defer f.Close()
+			r = f
+		}
+
+		if _, err := io.Copy(stdout, r); err != nil {
+			return err
+		}
+	}
+	return nil
 }
