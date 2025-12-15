@@ -12,10 +12,6 @@ import (
 	"github.com/chzyer/readline"
 )
 
-// Ensures gofmt doesn't remove the "fmt" and "os" imports in stage 1 (feel free to remove this!)
-var _ = fmt.Fprint
-var _ = os.Stdout
-
 var STDOUT = os.Stdout
 var STDERR = os.Stderr
 
@@ -73,53 +69,6 @@ func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
 	return outputFile, errorFile, filteredTokens
 }
 
-// func readInputWithCompletion() (string, error) {
-// 	var input string
-
-// 	for {
-// 		char, key, err := keyboard.GetSingleKey()
-// 		if err != nil {
-// 			return "", err
-// 		}
-
-// 		switch key {
-// 		case keyboard.KeyEnter:
-// 			fmt.Println()
-// 			return input, nil
-
-// 		case keyboard.KeyTab:
-// 			// 	// Auto-completion logic
-// 			completed := autoComplete(input)
-// 			if completed != input {
-// 				// Clear current line and print completed
-// 				fmt.Print("\r$ " + completed)
-// 				input = completed
-// 			}
-
-// 		case keyboard.KeyBackspace, keyboard.KeyBackspace2:
-// 			if len(input) > 0 {
-// 				input = input[:len(input)-1]
-// 				fmt.Print("\b \b") // Erase character
-// 			}
-
-// 		case keyboard.KeyCtrlC:
-// 			return "", fmt.Errorf("interrupted")
-
-// 		case keyboard.KeySpace:
-// 			// Handle space explicitly
-// 			input += " "
-// 			fmt.Print(" ")
-
-// 		default:
-// 			if char != 0 && char >= 32 && char <= 126 {
-// 				// Only printable ASCII characters
-// 				input += string(char)
-// 				fmt.Print(string(char))
-// 			}
-// 		}
-// 	}
-// }
-
 func autoComplete(partial string) string {
 	tokens := tokenize(partial)
 	lastToken := tokens[0]
@@ -170,6 +119,139 @@ func isStdinTerminal() bool {
 	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
+func handleCommand(command string, args []string) {
+	var err error
+	switch command {
+	case "exit":
+		os.Exit(0)
+	case "cat":
+		err = handleCat(args)
+		if err != nil {
+			if pathErr, ok := err.(*os.PathError); ok && os.IsNotExist(pathErr.Err) {
+				fmt.Fprintf(os.Stderr, "cat: %s: No such file or directory\n", pathErr.Path)
+			} else {
+				fmt.Fprintf(os.Stderr, "cat: %s\n", err)
+			}
+		}
+	case "echo":
+		for i := 0; i < len(args); i++ {
+			fmt.Printf("%s ", args[i])
+		}
+		fmt.Println()
+
+	case "type":
+		output, err := handleType(args)
+		if err == nil {
+			fmt.Println(output)
+		}
+	case "pwd":
+		pwd, err := os.Getwd()
+		if err == nil {
+			fmt.Println(pwd)
+		}
+	case "cd":
+		if len(args) > 0 {
+			var newDir string
+			if args[0] == "~" {
+				newDir, err = os.UserHomeDir()
+				if err != nil {
+					log.Fatal(err)
+				}
+			} else {
+				newDir = args[0]
+			}
+			err := os.Chdir(newDir)
+			if err != nil {
+				fmt.Printf("cd: %s: No such file or directory\n", newDir)
+			}
+		}
+	default:
+		if _, err := findExecutable(command); err == nil {
+			cmd := exec.Command(command, args...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Stdin = os.Stdin
+			cmd.Run()
+		} else {
+			fmt.Fprintf(os.Stderr, "%s: command not found\n", command)
+		}
+	}
+}
+
+func runPipeline(cmds [][]string) error {
+	n := len(cmds)
+	if n == 0 {
+		return nil
+	}
+
+	procs := make([]*exec.Cmd, 0, n)
+	var prevRd *os.File
+
+	for i, argv := range cmds {
+		if len(argv) == 0 {
+			return fmt.Errorf("empty command at index %d", i)
+		}
+
+		cmd := exec.Command(argv[0], argv[1:]...)
+
+		if prevRd != nil {
+			cmd.Stdin = prevRd
+		} else {
+			cmd.Stdin = os.Stdin
+		}
+
+		if i < n-1 {
+			r, w, err := os.Pipe()
+			if err != nil {
+				if prevRd != nil {
+					prevRd.Close()
+				}
+				return fmt.Errorf("pipe creation failed: %w", err)
+			}
+			cmd.Stdout = w
+
+			if prevRd != nil {
+				prevRd.Close()
+			}
+
+			if err := cmd.Start(); err != nil {
+				w.Close()
+				r.Close()
+				return fmt.Errorf("start failed for %v: %w", argv, err)
+			}
+
+			w.Close()
+			prevRd = r
+		} else {
+			cmd.Stdout = os.Stdout
+
+			if err := cmd.Start(); err != nil {
+				if prevRd != nil {
+					prevRd.Close()
+				}
+				return fmt.Errorf("start failed for %v: %w", argv, err)
+			}
+
+			if prevRd != nil {
+				prevRd.Close()
+				prevRd = nil
+			}
+		}
+
+		cmd.Stderr = os.Stderr
+		procs = append(procs, cmd)
+	}
+
+	var firstErr error
+	for _, cmd := range procs {
+		if err := cmd.Wait(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
+}
+
 func main() {
 	useReadline := false
 	var rl *readline.Instance
@@ -215,24 +297,23 @@ func main() {
 			if strings.Contains(inp, "\t") {
 				before := strings.Split(inp, "\t")[0]
 				comp := autoComplete(before)
-				fmt.Printf("\r$ %s", comp)
-				inp = comp + "\n"
-			} else {
-				fmt.Printf("\r$ %s", strings.TrimRight(inp, "\n"))
+				fmt.Printf("\r$ %s\n", comp)
+				inp = comp
 			}
 		}
 
 		inp = strings.TrimSpace(inp)
 		inp = strings.ReplaceAll(inp, "\a", "")
-		tokens := tokenize(inp)
-		if len(tokens) == 0 {
+
+		if inp == "" {
 			continue
 		}
 
+		// Tokenize and handle redirections
+		tokens := tokenize(inp)
 		outputFile, errorFile, filteredTokens := getOutputFiles(tokens)
-		command := filteredTokens[0]
-		args := filteredTokens[1:]
 
+		// ✅ APPLY REDIRECTIONS
 		if outputFile != nil {
 			os.Stdout = outputFile
 		}
@@ -240,62 +321,52 @@ func main() {
 			os.Stderr = errorFile
 		}
 
-		switch command {
-		case "exit":
-			os.Exit(0)
-		case "cat":
-			err = handleCat(args)
-			if err != nil {
-				if pathErr, ok := err.(*os.PathError); ok && os.IsNotExist(pathErr.Err) {
-					fmt.Fprintf(os.Stderr, "cat: %s: No such file or directory\n", pathErr.Path)
-				} else {
-					fmt.Fprintf(os.Stderr, "cat: %s\n", err)
-				}
-			}
-		case "echo":
-			for i := 0; i < len(args); i++ {
-				fmt.Printf("%s ", args[i])
-			}
-			fmt.Println()
+		// Split by pipe token
+		var commands [][]string
+		currentCmd := []string{}
 
-		case "type":
-			output, err := handleType(args)
-			if err == nil {
-				fmt.Println(output)
-			}
-		case "pwd":
-			pwd, err := os.Getwd()
-			if err == nil {
-				fmt.Println(pwd)
-			}
-		case "cd":
-			if len(args) > 0 {
-				var newDir string
-				if args[0] == "~" {
-					newDir, err = os.UserHomeDir()
-					if err != nil {
-						log.Fatal(err)
-					}
-				} else {
-					newDir = args[0]
+		for _, token := range filteredTokens {
+			if token == "|" {
+				if len(currentCmd) > 0 {
+					commands = append(commands, currentCmd)
+					currentCmd = []string{}
 				}
-				err := os.Chdir(newDir)
-				if err != nil {
-					fmt.Printf("cd: %s: No such file or directory\n", newDir)
-				}
-			}
-		default:
-			if _, err := findExecutable(command); err == nil {
-				cmd := exec.Command(command, args...)
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				cmd.Stdin = os.Stdin
-				cmd.Run()
 			} else {
-				fmt.Fprintf(os.Stderr, "%s: command not found\n", command)
+				currentCmd = append(currentCmd, token)
 			}
 		}
+		if len(currentCmd) > 0 {
+			commands = append(commands, currentCmd)
+		}
 
+		if len(commands) == 0 {
+			// Restore stdout/stderr
+			if outputFile != nil {
+				outputFile.Close()
+				os.Stdout = STDOUT
+			}
+			if errorFile != nil {
+				errorFile.Close()
+				os.Stderr = STDERR
+			}
+			continue
+		}
+
+		// ✅ CHECK IF SINGLE COMMAND OR PIPELINE
+		if len(commands) == 1 {
+			// Single command - use handleCommand for builtins
+			command := commands[0][0]
+			args := []string{}
+			if len(commands[0]) > 1 {
+				args = commands[0][1:]
+			}
+			handleCommand(command, args)
+		} else {
+			// Pipeline - use runPipeline
+			runPipeline(commands)
+		}
+
+		// ✅ RESTORE STDOUT/STDERR
 		if outputFile != nil {
 			outputFile.Close()
 			os.Stdout = STDOUT
