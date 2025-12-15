@@ -192,7 +192,7 @@ func runPipeline(cmds [][]string) error {
 		pc := pipeCmd{
 			command: argv[0],
 			args:    []string{},
-			stderr:  os.Stderr,
+			stderr:  STDERR,
 		}
 		if len(argv) > 1 {
 			pc.args = argv[1:]
@@ -219,7 +219,7 @@ func runPipeline(cmds [][]string) error {
 			}
 			prevRd = r
 		} else {
-			pc.stdout = nopWriteCloser{os.Stdout}
+			pc.stdout = nopWriteCloser{STDOUT}
 			if prevRd != nil {
 				defer prevRd.Close()
 			}
