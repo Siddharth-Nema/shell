@@ -262,7 +262,9 @@ func runPipeline(cmds [][]string) error {
 				}(cmd)
 			} else {
 				pc.stdout.Close()
-				errChan <- fmt.Errorf("%s: command not found", pc.command)
+				go func(err error) {
+					errChan <- err
+				}(fmt.Errorf("%s: command not found", pc.command))
 			}
 		}
 	}
