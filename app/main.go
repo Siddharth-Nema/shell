@@ -157,7 +157,7 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 		history, err := getHistory()
 		if err == nil {
 			for i, cmd := range history {
-				fmt.Fprintf(stdout, "    %d. %s\n", i+1, cmd)
+				fmt.Fprintf(stdout, "    %d %s\n", i+1, cmd)
 			}
 		}
 	default:
