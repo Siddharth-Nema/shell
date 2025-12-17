@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -155,9 +156,13 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 		}
 	case "history":
 		history, err := getHistory()
+		var limit = len(history)
+		if len(args) > 0 {
+			limit, err = strconv.Atoi(args[0])
+		}
 		if err == nil {
-			for i, cmd := range history {
-				fmt.Fprintf(stdout, "    %d %s\n", i+1, cmd)
+			for i := len(history) - limit; i < len(history); i++ {
+				fmt.Fprintf(stdout, "    %d %s\n", i+1, history[i])
 			}
 		}
 	default:
