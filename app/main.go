@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/chzyer/readline"
 )
@@ -118,39 +119,32 @@ func isStdinTerminal() bool {
 	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
-func handleCommand(command string, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser, wg *sync.WaitGroup) error {
+	var err error
 	switch command {
 	case "exit":
 		os.Exit(0)
-		return nil
 	case "cat":
-		return handleCatWithIO(args, stdin, stdout, stderr)
+		err = handleCatWithIO(args, stdin, stdout, stderr)
 	case "echo":
 		output := strings.Join(args, " ")
 		fmt.Fprintln(stdout, output)
-		return nil
 
 	case "type":
 		output, err := handleType(args)
 		if err == nil {
 			fmt.Fprintln(stdout, output)
 		}
-		return err
 	case "pwd":
 		pwd, err := os.Getwd()
 		if err == nil {
 			fmt.Fprintln(stdout, pwd)
 		}
-		return err
 	case "cd":
 		if len(args) > 0 {
 			var newDir string
-			var err error
 			if args[0] == "~" {
 				newDir, err = os.UserHomeDir()
-				if err != nil {
-					return err
-				}
 			} else {
 				newDir = args[0]
 			}
@@ -158,209 +152,207 @@ func handleCommand(command string, args []string, stdin io.Reader, stdout io.Wri
 			if err != nil {
 				fmt.Fprintf(stderr, "cd: %s: No such file or directory\n", newDir)
 			}
-			return err
 		}
-		return nil
 	default:
 		if _, err := findExecutable(command); err == nil {
 			cmd := exec.Command(command, args...)
 			cmd.Stdout = stdout
-			cmd.Stderr = stderr // ✅ Use stderr parameter, not os.Stderr
+			cmd.Stderr = stderr
 			cmd.Stdin = stdin
-			return cmd.Run() // ✅ Return the error
+			err = cmd.Run()
 		} else {
-			fmt.Fprintf(stderr, "%s: command not found\n", command) // ✅ Use stderr parameter
-			return fmt.Errorf("command not found: %s", command)     // ✅ Return error
+			fmt.Fprintf(stderr, "%s: command not found\n", command)
+			err = fmt.Errorf("command not found: %s", command)
 		}
 	}
+
+	for _, file := range []io.Closer{stdin, stdout, stderr} {
+		if file != os.Stdin && file != os.Stdout && file != os.Stderr {
+			file.Close()
+		}
+	}
+
+	if wg != nil {
+		wg.Done()
+	}
+
+	return err
 }
 
-func runPipeline(cmds [][]string) error {
-	n := len(cmds)
-	if n == 0 {
-		return nil
-	}
+func runPipeline(segments [][]string) {
+	// n := len(cmds)
+	// if n == 0 {
+	// 	return nil
+	// }
 
-	processes := make([]pipeCmd, n)
-	var prevRd *os.File
+	// processes := make([]pipeCmd, n)
+	// var prevRd io.Reader
 
-	for i, argv := range cmds {
-		if len(argv) == 0 {
-			return fmt.Errorf("Empty command at index %d", i)
-		}
+	// for i, argv := range cmds {
+	// 	if len(argv) == 0 {
+	// 		return fmt.Errorf("Empty command at index %d", i)
+	// 	}
 
-		pc := pipeCmd{
-			command: argv[0],
-			args:    []string{},
-			stderr:  STDERR,
-		}
-		if len(argv) > 1 {
-			pc.args = argv[1:]
-		}
+	// 	pc := pipeCmd{
+	// 		command: argv[0],
+	// 		args:    []string{},
+	// 		stderr:  STDERR,
+	// 	}
+	// 	if len(argv) > 1 {
+	// 		pc.args = argv[1:]
+	// 	}
 
-		if prevRd != nil {
-			pc.stdin = prevRd
-		} else {
-			pc.stdin = os.Stdin
-		}
+	// 	// Set stdin for this command
+	// 	if prevRd != nil {
+	// 		pc.stdin = prevRd
+	// 	} else {
+	// 		pc.stdin = os.Stdin
+	// 	}
 
-		if i < n-1 {
-			r, w, err := os.Pipe()
-			if err != nil {
-				if prevRd != nil {
-					prevRd.Close()
-				}
-				return fmt.Errorf("pipe creation failed: %w", err)
-			}
-			pc.stdout = w
+	// 	// Set stdout for this command
+	// 	if i < n-1 {
+	// 		r, w, err := os.Pipe()
+	// 		if err != nil {
+	// 			return fmt.Errorf("pipe creation failed: %w", err)
+	// 		}
+	// 		pc.stdout = w
+	// 		prevRd = r // Next command reads from this pipe
+	// 	} else {
+	// 		pc.stdout = nopWriteCloser{STDOUT}
+	// 	}
 
-			if prevRd != nil {
-				prevRd.Close()
-			}
-			prevRd = r
-		} else {
-			pc.stdout = nopWriteCloser{STDOUT}
-			if prevRd != nil {
-				defer prevRd.Close()
-			}
-		}
+	// 	processes[i] = pc
+	// }
 
-		processes[i] = pc
-	}
+	// // Start ALL commands concurrently
+	// errChan := make(chan error, n)
 
-	// Start all commands first
-	type startedCmd struct {
-		pc  pipeCmd
-		cmd *exec.Cmd // nil for builtins
-	}
+	// for _, pc := range processes {
+	// 	if isBuiltin(pc.command) {
+	// 		// Builtin - run in goroutine
+	// 		go func(p pipeCmd) {
+	// 			err := handleBuiltin(p.command, p.args, p.stdin, p.stdout, p.stderr)
+	// 			p.stdout.Close()
+	// 			errChan <- err
+	// 		}(pc)
+	// 	} else {
+	// 		// External command - start and wait in goroutine
+	// 		go func(p pipeCmd) {
+	// 			if _, err := findExecutable(p.command); err == nil {
+	// 				cmd := exec.Command(p.command, p.args...)
+	// 				cmd.Stdin = p.stdin
+	// 				cmd.Stdout = p.stdout
+	// 				cmd.Stderr = p.stderr
 
-	started := make([]startedCmd, 0, n)
+	// 				p.stdout.Close() // Close write end before running
+	// 				errChan <- cmd.Run()
+	// 			} else {
+	// 				p.stdout.Close()
+	// 				errChan <- fmt.Errorf("%s: command not found", p.command)
+	// 			}
+	// 		}(pc)
+	// 	}
+	// }
 
-	for _, pc := range processes {
-		if isBuiltin(pc.command) {
-			// Builtin - will run in goroutine later
-			started = append(started, startedCmd{pc: pc, cmd: nil})
-		} else {
-			// External command - start it now
-			if _, err := findExecutable(pc.command); err == nil {
-				cmd := exec.Command(pc.command, pc.args...)
-				cmd.Stdin = pc.stdin
-				cmd.Stdout = pc.stdout
-				cmd.Stderr = pc.stderr
+	// // Wait for all commands to complete
+	// var firstErr error
+	// for i := 0; i < n; i++ {
+	// 	if err := <-errChan; err != nil && firstErr == nil {
+	// 		firstErr = err
+	// 	}
+	// }
 
-				if err := cmd.Start(); err != nil {
-					return fmt.Errorf("start failed for %s: %w", pc.command, err)
-				}
+	// return firstErr
 
-				started = append(started, startedCmd{pc: pc, cmd: cmd})
+	if len(segments) == 1 {
+		args := segments[0]
+		handleCommand(args[0], args[1:], os.Stdin, os.Stdout, os.Stderr, nil)
+	} else {
+		inFile, outFile, errFile := os.Stdin, os.Stdout, os.Stdout
+		var wg sync.WaitGroup
+		var input, previousInput io.ReadCloser
+		var output io.WriteCloser
+		previousInput = inFile
+		for i, segment := range segments {
+			wg.Add(1)
+			if i < len(segments)-1 {
+				input, output = io.Pipe()
 			} else {
-				return fmt.Errorf("%s: command not found", pc.command)
+				output = outFile
 			}
+			// TODO: should handle redirections here
+			go handleCommand(segment[0], segment[1:], previousInput, output, errFile, &wg)
+			previousInput = input
 		}
+		wg.Wait()
 	}
 
-	// Close all write ends of pipes after starting (only for external commands)
-	for _, sc := range started {
-		if sc.cmd != nil {
-			// Only close for external commands that have already started
-			sc.pc.stdout.Close()
-		}
-	}
-
-	// Now wait for all commands
-	errChan := make(chan error, n)
-
-	for _, sc := range started {
-		if sc.cmd == nil {
-			// Builtin - run in goroutine
-			go func(p pipeCmd) {
-				err := handleBuiltin(p.command, p.args, p.stdin, p.stdout, p.stderr)
-				p.stdout.Close() // Close after execution
-				errChan <- err
-			}(sc.pc)
-		} else {
-			// External - wait in goroutine
-			go func(c *exec.Cmd) {
-				errChan <- c.Wait()
-			}(sc.cmd)
-		}
-	}
-
-	// Wait for all commands to complete
-	var firstErr error
-	for i := 0; i < n; i++ {
-		if err := <-errChan; err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-
-	return firstErr
 }
 
-// nopWriteCloser wraps a Writer to add a no-op Close method
-type nopWriteCloser struct {
-	io.Writer
-}
+// // nopWriteCloser wraps a Writer to add a no-op Close method
+// type nopWriteCloser struct {
+// 	io.Writer
+// }
 
-func (nopWriteCloser) Close() error { return nil }
+// func (nopWriteCloser) Close() error { return nil }
 
-// isBuiltin checks if a command is a shell builtin
-func isBuiltin(command string) bool {
-	switch command {
-	case "exit", "cd", "echo", "type", "pwd", "cat":
-		return true
-	default:
-		return false
-	}
-}
+// // isBuiltin checks if a command is a shell builtin
+// func isBuiltin(command string) bool {
+// 	switch command {
+// 	case "exit", "cd", "echo", "type", "pwd", "cat":
+// 		return true
+// 	default:
+// 		return false
+// 	}
+// }
 
-// handleBuiltin executes builtin commands with custom I/O
-func handleBuiltin(command string, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
-	switch command {
-	case "exit":
-		os.Exit(0)
-		return nil
-	case "cat":
-		return handleCatWithIO(args, stdin, stdout, stderr)
-	case "echo":
-		output := strings.Join(args, " ")
-		fmt.Fprintln(stdout, output)
-		return nil
-	case "type":
-		output, err := handleType(args)
-		if err == nil {
-			fmt.Fprintln(stdout, output)
-		}
-		return err
-	case "pwd":
-		pwd, err := os.Getwd()
-		if err == nil {
-			fmt.Fprintln(stdout, pwd)
-		}
-		return err
-	case "cd":
-		if len(args) > 0 {
-			var newDir string
-			var err error
-			if args[0] == "~" {
-				newDir, err = os.UserHomeDir()
-				if err != nil {
-					return err
-				}
-			} else {
-				newDir = args[0]
-			}
-			err = os.Chdir(newDir)
-			if err != nil {
-				fmt.Fprintf(stderr, "cd: %s: No such file or directory\n", newDir)
-			}
-			return err
-		}
-		return nil
-	default:
-		return fmt.Errorf("unknown builtin: %s", command)
-	}
-}
+// // handleBuiltin executes builtin commands with custom I/O
+// func handleBuiltin(command string, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+// 	switch command {
+// 	case "exit":
+// 		os.Exit(0)
+// 		return nil
+// 	case "cat":
+// 		return handleCatWithIO(args, stdin, stdout, stderr)
+// 	case "echo":
+// 		output := strings.Join(args, " ")
+// 		fmt.Fprintln(stdout, output)
+// 		return nil
+// 	case "type":
+// 		output, err := handleType(args)
+// 		if err == nil {
+// 			fmt.Fprintln(stdout, output)
+// 		}
+// 		return err
+// 	case "pwd":
+// 		pwd, err := os.Getwd()
+// 		if err == nil {
+// 			fmt.Fprintln(stdout, pwd)
+// 		}
+// 		return err
+// 	case "cd":
+// 		if len(args) > 0 {
+// 			var newDir string
+// 			var err error
+// 			if args[0] == "~" {
+// 				newDir, err = os.UserHomeDir()
+// 				if err != nil {
+// 					return err
+// 				}
+// 			} else {
+// 				newDir = args[0]
+// 			}
+// 			err = os.Chdir(newDir)
+// 			if err != nil {
+// 				fmt.Fprintf(stderr, "cd: %s: No such file or directory\n", newDir)
+// 			}
+// 			return err
+// 		}
+// 		return nil
+// 	default:
+// 		return fmt.Errorf("unknown builtin: %s", command)
+// 	}
+// }
 
 func main() {
 	useReadline := false
