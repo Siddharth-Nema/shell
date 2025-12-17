@@ -131,14 +131,14 @@ func FindExecutablesInPath() ([]string, error) {
 
 	paths := filepath.SplitList(pathEnv)
 	results := []string{}
-	seen := make(map[string]bool) // avoid duplicates
+	seen := make(map[string]bool)
 
 	isWindows := runtime.GOOS == "windows"
 
 	for _, dir := range paths {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			continue // skip unreadable dirs
+			continue
 		}
 
 		for _, entry := range entries {
