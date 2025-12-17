@@ -216,6 +216,8 @@ func main() {
 	useReadline := false
 	var rl *readline.Instance
 
+	os.Truncate("../history.txt", 0)
+
 	if isStdinTerminal() {
 		config := &readline.Config{
 			Prompt:          "$ ",
