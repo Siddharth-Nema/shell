@@ -157,14 +157,38 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 	case "history":
 		history, err := getHistory()
 		var limit = len(history)
-		if len(args) > 0 {
-			limit, err = strconv.Atoi(args[0])
-		}
-		if err == nil {
-			for i := len(history) - limit; i < len(history); i++ {
-				fmt.Fprintf(stdout, "    %d %s\n", i+1, history[i])
+
+		if len(args) > 1 && args[0] == "-r" {
+			fmt.Fprintln(stdout, "here")
+			historyFile, err := os.OpenFile("../history.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+
+			if err == nil {
+				defer historyFile.Close()
+				prevHistory, err := os.Open(args[1])
+				fmt.Fprintln(stdout, "a")
+				if err == nil {
+					defer prevHistory.Close()
+					fmt.Fprintln(stdout, "b")
+					bytesWritten, err := io.Copy(historyFile, prevHistory)
+					fmt.Println(bytesWritten)
+
+					if err != nil {
+						return fmt.Errorf("failed to copy file contents: %w", err)
+					}
+				}
+			}
+		} else {
+			if len(args) > 0 {
+				limit, err = strconv.Atoi(args[0])
+			}
+
+			if err == nil {
+				for i := len(history) - limit; i < len(history); i++ {
+					fmt.Fprintf(stdout, "    %d %s\n", i+1, history[i])
+				}
 			}
 		}
+
 	default:
 		if _, err := findExecutable(command); err == nil {
 			cmd := exec.Command(command, args...)
