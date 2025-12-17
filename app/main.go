@@ -159,18 +159,14 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 		var limit = len(history)
 
 		if len(args) > 1 && args[0] == "-r" {
-			fmt.Fprintln(stdout, "here")
 			historyFile, err := os.OpenFile("../history.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 
 			if err == nil {
 				defer historyFile.Close()
 				prevHistory, err := os.Open(args[1])
-				fmt.Fprintln(stdout, "a")
 				if err == nil {
 					defer prevHistory.Close()
-					fmt.Fprintln(stdout, "b")
-					bytesWritten, err := io.Copy(historyFile, prevHistory)
-					fmt.Println(bytesWritten)
+					_, err := io.Copy(historyFile, prevHistory)
 
 					if err != nil {
 						return fmt.Errorf("failed to copy file contents: %w", err)
