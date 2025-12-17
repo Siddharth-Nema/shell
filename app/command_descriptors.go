@@ -6,6 +6,5 @@ var BuiltinCommands = []string{
 	"exit",
 	"type",
 	"pwd",
-	// "cd",
-	// "cat",
+	"history",
 }

@@ -153,6 +153,13 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 				fmt.Fprintf(stderr, "cd: %s: No such file or directory\n", newDir)
 			}
 		}
+	case "history":
+		history, err := getHistory()
+		if err == nil {
+			for i, cmd := range history {
+				fmt.Fprintf(stdout, "%d. %s\n", i, cmd)
+			}
+		}
 	default:
 		if _, err := findExecutable(command); err == nil {
 			cmd := exec.Command(command, args...)
@@ -215,6 +222,7 @@ func main() {
 			AutoComplete:    makeCompleter(),
 			InterruptPrompt: "^C",
 			EOFPrompt:       "exit",
+			HistoryFile:     "../history.txt",
 		}
 		var err error
 		rl, err = readline.NewEx(config)

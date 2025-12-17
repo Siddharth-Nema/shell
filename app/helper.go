@@ -253,3 +253,14 @@ func handleCatWithIO(files []string, stdin io.Reader, stdout io.Writer, stderr i
 	}
 	return nil
 }
+
+func getHistory() ([]string, error) {
+	content, err := os.ReadFile("../history.txt")
+	if err != nil {
+		return nil, err
+	}
+	contentAsString := string(content)
+	history := strings.Split(contentAsString, "\n")
+	history = history[0 : len(history)-1]
+	return history, err
+}
