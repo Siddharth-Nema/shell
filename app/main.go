@@ -326,7 +326,6 @@ func main() {
 		}
 
 		if len(commands) == 0 {
-			// Restore stdout/stderr
 			if outputFile != nil {
 				outputFile.Close()
 				os.Stdout = STDOUT
