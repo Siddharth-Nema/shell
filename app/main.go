@@ -186,7 +186,7 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 						if err != nil {
 							err = fmt.Errorf("failed to copy file contents: %w", err)
 						}
-						fileToWrite.Write([]byte("\n"))
+						//fileToWrite.Write([]byte("\n"))
 					}
 				}
 			}
