@@ -246,13 +246,15 @@ func handleHistoryCommand(args []string, stdout io.WriteCloser) error {
 			fileToAppend, err := os.OpenFile(args[1], os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 			if err == nil {
 				defer fileToAppend.Close()
-				for i := lastSavedHistory; i < len(history); i++ {
-					fileToAppend.WriteString(history[i] + "\n")
+				newEntries := history[lastSavedHistory:]
+				for _, entry := range newEntries {
+					fmt.Fprintln(fileToAppend, entry)
 				}
+				fmt.Fprintln(fileToAppend)
 			}
 			lastSavedHistory = len(history)
 		}
-
+		return nil
 	} else {
 		var limit = len(history)
 		if len(args) > 0 {
