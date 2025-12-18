@@ -250,7 +250,6 @@ func handleHistoryCommand(args []string, stdout io.WriteCloser) error {
 				for _, entry := range newEntries {
 					fmt.Fprintln(fileToAppend, entry)
 				}
-				fmt.Fprintln(fileToAppend)
 			}
 			lastSavedHistory = len(history)
 		}
