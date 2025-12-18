@@ -170,7 +170,7 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 						_, err := io.Copy(historyFile, prevHistory)
 
 						if err != nil {
-							return fmt.Errorf("failed to copy file contents: %w", err)
+							err = fmt.Errorf("failed to copy file contents: %w", err)
 						}
 					}
 				}
@@ -184,8 +184,9 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 						_, err := io.Copy(fileToWrite, historyFile)
 
 						if err != nil {
-							return fmt.Errorf("failed to copy file contents: %w", err)
+							err = fmt.Errorf("failed to copy file contents: %w", err)
 						}
+						fileToWrite.Write([]byte("\n"))
 					}
 				}
 			}
