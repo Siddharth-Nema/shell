@@ -160,7 +160,6 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 		}
 	case "history":
 		//history, err := getHistory()
-		var limit = len(history)
 
 		if len(args) > 1 {
 			switch args[0] {
@@ -179,9 +178,10 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 				// 	}
 				// }
 
-				prevHistory, err := os.ReadFile(args[1])
+				content, err := os.ReadFile(args[1])
+				prevHistory := strings.TrimRight(string(content), "\r\n")
 				if err == nil {
-					historyData := strings.Split(string(prevHistory), "\n")
+					historyData := strings.Split(prevHistory, "\n")
 					for _, historyCmd := range historyData {
 						rl.SaveHistory(historyCmd)
 						history = append(history, historyCmd)
@@ -233,6 +233,7 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 			}
 
 		} else {
+			var limit = len(history)
 			if len(args) > 0 {
 				limit, err = strconv.Atoi(args[0])
 			}
