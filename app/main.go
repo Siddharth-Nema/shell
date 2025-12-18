@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -31,7 +30,8 @@ func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
 
 	for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
-		if token == ">" || token == "1>" || token == ">>" || token == "1>>" {
+		switch token {
+		case ">", "1>", ">>", "1>>":
 			if i+1 < len(tokens) {
 				outputFilePath = tokens[i+1]
 				i++
@@ -39,7 +39,7 @@ func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
 					outputMode = os.O_APPEND
 				}
 			}
-		} else if token == "2>" || token == "2>>" {
+		case "2>", "2>>":
 			if i+1 < len(tokens) {
 				errorFilePath = tokens[i+1]
 				i++
@@ -47,7 +47,7 @@ func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
 					errorMode = os.O_APPEND
 				}
 			}
-		} else {
+		default:
 			filteredTokens = append(filteredTokens, token)
 		}
 	}
@@ -159,91 +159,7 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 			}
 		}
 	case "history":
-		//history, err := getHistory()
-
-		if len(args) > 1 {
-			switch args[0] {
-			case "-r":
-				// historyFile, err := os.OpenFile("../history.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-				// if err == nil {
-				// 	defer historyFile.Close()
-				// 	prevHistory, err := os.Open(args[1])
-				// 	if err == nil {
-				// 		defer prevHistory.Close()
-				// 		_, err := io.Copy(historyFile, prevHistory)
-
-				// 		if err != nil {
-				// 			err = fmt.Errorf("failed to copy file contents: %w", err)
-				// 		}
-				// 	}
-				// }
-
-				content, err := os.ReadFile(args[1])
-				prevHistory := strings.TrimRight(string(content), "\r\n")
-				if err == nil {
-					historyData := strings.Split(prevHistory, "\n")
-					for _, historyCmd := range historyData {
-						rl.SaveHistory(historyCmd)
-						history = append(history, historyCmd)
-					}
-				}
-			case "-w":
-				// historyFile, err := os.Open("../history.txt")
-				// if err == nil {
-				// 	defer historyFile.Close()
-				// 	fileToWrite, err := os.OpenFile(args[1], os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
-				// 	if err == nil {
-				// 		defer fileToWrite.Close()
-				// 		_, err := io.Copy(fileToWrite, historyFile)
-
-				// 		if err != nil {
-				// 			err = fmt.Errorf("failed to copy file contents: %w", err)
-				// 		}
-				// 	}
-				// }
-				fileToWrite, err := os.OpenFile(args[1], os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
-				if err == nil {
-					defer fileToWrite.Close()
-					for _, historyCmd := range history {
-						fileToWrite.WriteString(historyCmd + "\n")
-					}
-				}
-			case "-a":
-				// historyFile, err := os.Open("../history.txt")
-				// if err == nil {
-				// 	defer historyFile.Close()
-				// 	fileToWrite, err := os.OpenFile(args[1], os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-				// 	if err == nil {
-				// 		defer fileToWrite.Close()
-				// 		_, err := io.Copy(fileToWrite, historyFile)
-
-				// 		if err != nil {
-				// 			err = fmt.Errorf("failed to copy file contents: %w", err)
-				// 		}
-				// 	}
-				// }
-				fileToAppend, err := os.OpenFile(args[1], os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-				if err == nil {
-					defer fileToAppend.Close()
-					for i := lastSavedHistory; i < len(history); i++ {
-						fileToAppend.WriteString(history[i] + "\n")
-					}
-				}
-				lastSavedHistory = len(history)
-			}
-
-		} else {
-			var limit = len(history)
-			if len(args) > 0 {
-				limit, err = strconv.Atoi(args[0])
-			}
-
-			if err == nil {
-				for i := len(history) - limit; i < len(history); i++ {
-					fmt.Fprintf(stdout, "    %d %s\n", i+1, history[i])
-				}
-			}
-		}
+		err = handleHistoryCommand(args, stdout)
 
 	default:
 		if _, err := findExecutable(command); err == nil {
@@ -303,6 +219,11 @@ func main() {
 	os.Truncate("../history.txt", 0)
 	history = nil
 	lastSavedHistory = 0
+
+	historyFile, exists := os.LookupEnv("HISTFILE")
+	if exists {
+		readHistoryFromFile(historyFile)
+	}
 
 	if isStdinTerminal() {
 		config := &readline.Config{

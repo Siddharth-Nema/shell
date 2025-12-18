@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -32,33 +33,6 @@ func handleType(args []string) (output string, err error) {
 	} else {
 		return (target + ": not found"), nil
 	}
-}
-
-// handleCat implements the 'cat' command, which concatenates and prints file contents to stdout.
-// If no files are specified or "-" is used, it reads from stdin.
-func handleCat(files []string) error {
-	if len(files) == 0 {
-		files = []string{"-"}
-	}
-
-	for _, path := range files {
-		var r io.Reader
-		if path == "-" {
-			r = os.Stdin
-		} else {
-			f, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			r = f
-		}
-
-		if _, err := io.Copy(os.Stdout, r); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // tokenize splits the input string into tokens, handling single quotes, double quotes, and escape sequences.
@@ -254,13 +228,55 @@ func handleCatWithIO(files []string, stdin io.Reader, stdout io.Writer, stderr i
 	return nil
 }
 
-func getHistory() ([]string, error) {
-	content, err := os.ReadFile("../history.txt")
-	if err != nil {
-		return nil, err
+func handleHistoryCommand(args []string, stdout io.WriteCloser) error {
+	var err error
+	if len(args) > 1 {
+		switch args[0] {
+		case "-r":
+			readHistoryFromFile(args[1])
+		case "-w":
+			fileToWrite, err := os.OpenFile(args[1], os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+			if err == nil {
+				defer fileToWrite.Close()
+				for _, historyCmd := range history {
+					fileToWrite.WriteString(historyCmd + "\n")
+				}
+			}
+		case "-a":
+			fileToAppend, err := os.OpenFile(args[1], os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+			if err == nil {
+				defer fileToAppend.Close()
+				for i := lastSavedHistory; i < len(history); i++ {
+					fileToAppend.WriteString(history[i] + "\n")
+				}
+			}
+			lastSavedHistory = len(history)
+		}
+
+	} else {
+		var limit = len(history)
+		if len(args) > 0 {
+			limit, err = strconv.Atoi(args[0])
+		}
+
+		if err == nil {
+			for i := len(history) - limit; i < len(history); i++ {
+				fmt.Fprintf(stdout, "    %d %s\n", i+1, history[i])
+			}
+		}
 	}
-	contentAsString := string(content)
-	history := strings.Split(contentAsString, "\n")
-	history = history[0 : len(history)-1]
-	return history, err
+
+	return err
+}
+
+func readHistoryFromFile(filePath string) {
+	content, err := os.ReadFile(filePath)
+	prevHistory := strings.TrimRight(string(content), "\r\n")
+	if err == nil {
+		historyData := strings.Split(prevHistory, "\n")
+		for _, historyCmd := range historyData {
+			rl.SaveHistory(historyCmd)
+			history = append(history, historyCmd)
+		}
+	}
 }
