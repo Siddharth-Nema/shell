@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -243,17 +244,36 @@ func handleHistoryCommand(args []string, stdout io.WriteCloser) error {
 				}
 			}
 		case "-a":
-			fileToAppend, err := os.OpenFile(args[1], os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-			if err == nil {
-				defer fileToAppend.Close()
-				newEntries := history[lastSavedHistory:]
-				for _, entry := range newEntries {
-					fmt.Fprintln(fileToAppend, entry)
-				}
+			if len(args) < 2 {
+				fmt.Fprintln(stdout, "history: -a requires a filename argument")
+				return fmt.Errorf("history: missing filename")
+			}
+			existingContent, err := os.ReadFile(args[1])
+			if err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("failed to read file: %w", err)
+			}
+			existingContent = bytes.TrimRight(existingContent, "\n")
+			if len(existingContent) > 0 {
+				existingContent = append(existingContent, '\n') // Keep one newline after last command
+			}
+
+			err = os.WriteFile(args[1], existingContent, 0644)
+			if err != nil {
+				return fmt.Errorf("failed to write file: %w", err)
+			}
+
+			fileToWrite, err := os.OpenFile(args[1], os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+			if err != nil {
+				return fmt.Errorf("failed to open file: %w", err)
+			}
+			defer fileToWrite.Close()
+			newEntries := history[lastSavedHistory:]
+			for _, entry := range newEntries {
+				fmt.Fprintln(fileToWrite, entry)
 			}
 			lastSavedHistory = len(history)
+			return nil
 		}
-		return nil
 	} else {
 		var limit = len(history)
 		if len(args) > 0 {
