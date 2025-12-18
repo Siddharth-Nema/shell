@@ -16,6 +16,10 @@ import (
 var STDOUT = os.Stdout
 var STDERR = os.Stderr
 
+var history []string
+var rl *readline.Instance
+var lastSavedHistory int
+
 // getOutputFiles processes redirection operators (>, >>, 2>, 2>>) from tokens and opens the target files.
 // It returns the output file, error file, and a filtered token slice without redirection operators.
 func getOutputFiles(tokens []string) (*os.File, *os.File, []string) {
@@ -155,40 +159,77 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 			}
 		}
 	case "history":
-		history, err := getHistory()
+		//history, err := getHistory()
 		var limit = len(history)
 
 		if len(args) > 1 {
 			switch args[0] {
 			case "-r":
-				historyFile, err := os.OpenFile("../history.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-				if err == nil {
-					defer historyFile.Close()
-					prevHistory, err := os.Open(args[1])
-					if err == nil {
-						defer prevHistory.Close()
-						_, err := io.Copy(historyFile, prevHistory)
+				// historyFile, err := os.OpenFile("../history.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+				// if err == nil {
+				// 	defer historyFile.Close()
+				// 	prevHistory, err := os.Open(args[1])
+				// 	if err == nil {
+				// 		defer prevHistory.Close()
+				// 		_, err := io.Copy(historyFile, prevHistory)
 
-						if err != nil {
-							err = fmt.Errorf("failed to copy file contents: %w", err)
-						}
+				// 		if err != nil {
+				// 			err = fmt.Errorf("failed to copy file contents: %w", err)
+				// 		}
+				// 	}
+				// }
+
+				prevHistory, err := os.ReadFile(args[1])
+				if err == nil {
+					historyData := strings.Split(string(prevHistory), "\n")
+					for _, historyCmd := range historyData {
+						rl.SaveHistory(historyCmd)
+						history = append(history, historyCmd)
 					}
 				}
 			case "-w":
-				historyFile, err := os.Open("../history.txt")
-				if err == nil {
-					defer historyFile.Close()
-					fileToWrite, err := os.OpenFile(args[1], os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
-					if err == nil {
-						defer fileToWrite.Close()
-						_, err := io.Copy(fileToWrite, historyFile)
+				// historyFile, err := os.Open("../history.txt")
+				// if err == nil {
+				// 	defer historyFile.Close()
+				// 	fileToWrite, err := os.OpenFile(args[1], os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+				// 	if err == nil {
+				// 		defer fileToWrite.Close()
+				// 		_, err := io.Copy(fileToWrite, historyFile)
 
-						if err != nil {
-							err = fmt.Errorf("failed to copy file contents: %w", err)
-						}
-						//fileToWrite.Write([]byte("\n"))
+				// 		if err != nil {
+				// 			err = fmt.Errorf("failed to copy file contents: %w", err)
+				// 		}
+				// 	}
+				// }
+				fileToWrite, err := os.OpenFile(args[1], os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+				if err == nil {
+					defer fileToWrite.Close()
+					for _, historyCmd := range history {
+						fileToWrite.WriteString(historyCmd + "\n")
 					}
 				}
+			case "-a":
+				// historyFile, err := os.Open("../history.txt")
+				// if err == nil {
+				// 	defer historyFile.Close()
+				// 	fileToWrite, err := os.OpenFile(args[1], os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+				// 	if err == nil {
+				// 		defer fileToWrite.Close()
+				// 		_, err := io.Copy(fileToWrite, historyFile)
+
+				// 		if err != nil {
+				// 			err = fmt.Errorf("failed to copy file contents: %w", err)
+				// 		}
+				// 	}
+				// }
+				fileToAppend, err := os.OpenFile(args[1], os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+				if err == nil {
+					defer fileToAppend.Close()
+					for i := lastSavedHistory; i < len(history); i++ {
+						fileToAppend.WriteString(history[i] + "\n")
+					}
+				}
+				lastSavedHistory = len(history) - 1
 			}
 
 		} else {
@@ -257,9 +298,10 @@ func runPipeline(segments [][]string) {
 
 func main() {
 	useReadline := false
-	var rl *readline.Instance
 
 	os.Truncate("../history.txt", 0)
+	history = nil
+	lastSavedHistory = 0
 
 	if isStdinTerminal() {
 		config := &readline.Config{
@@ -267,7 +309,7 @@ func main() {
 			AutoComplete:    makeCompleter(),
 			InterruptPrompt: "^C",
 			EOFPrompt:       "exit",
-			HistoryFile:     "../history.txt",
+			HistoryFile:     "",
 		}
 		var err error
 		rl, err = readline.NewEx(config)
@@ -314,6 +356,9 @@ func main() {
 		if inp == "" {
 			continue
 		}
+
+		history = append(history, inp)
+		rl.SaveHistory(inp)
 
 		tokens := tokenize(inp)
 		outputFile, errorFile, filteredTokens := getOutputFiles(tokens)
