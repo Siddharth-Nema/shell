@@ -158,21 +158,38 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 		history, err := getHistory()
 		var limit = len(history)
 
-		if len(args) > 1 && args[0] == "-r" {
-			historyFile, err := os.OpenFile("../history.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-
-			if err == nil {
-				defer historyFile.Close()
-				prevHistory, err := os.Open(args[1])
+		if len(args) > 1 {
+			switch args[0] {
+			case "-r":
+				historyFile, err := os.OpenFile("../history.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 				if err == nil {
-					defer prevHistory.Close()
-					_, err := io.Copy(historyFile, prevHistory)
+					defer historyFile.Close()
+					prevHistory, err := os.Open(args[1])
+					if err == nil {
+						defer prevHistory.Close()
+						_, err := io.Copy(historyFile, prevHistory)
 
-					if err != nil {
-						return fmt.Errorf("failed to copy file contents: %w", err)
+						if err != nil {
+							return fmt.Errorf("failed to copy file contents: %w", err)
+						}
+					}
+				}
+			case "-w":
+				historyFile, err := os.Open("../history.txt")
+				if err == nil {
+					defer historyFile.Close()
+					fileToWrite, err := os.OpenFile(args[1], os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+					if err == nil {
+						defer fileToWrite.Close()
+						_, err := io.Copy(fileToWrite, historyFile)
+
+						if err != nil {
+							return fmt.Errorf("failed to copy file contents: %w", err)
+						}
 					}
 				}
 			}
+
 		} else {
 			if len(args) > 0 {
 				limit, err = strconv.Atoi(args[0])
