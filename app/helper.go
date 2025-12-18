@@ -256,21 +256,22 @@ func handleHistoryCommand(args []string, stdout io.WriteCloser) error {
 			if len(existingContent) > 0 {
 				existingContent = append(existingContent, '\n') // Keep one newline after last command
 			}
-
-			err = os.WriteFile(args[1], existingContent, 0644)
-			if err != nil {
-				return fmt.Errorf("failed to write file: %w", err)
+			prevHistory := strings.Split(strings.TrimRight(string(existingContent), "\r\n"), "\n")
+			newEntries := history[lastSavedHistory:]
+			for _, entry := range newEntries {
+				prevHistory = append(prevHistory, entry)
 			}
 
-			fileToWrite, err := os.OpenFile(args[1], os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+			fileToWrite, err := os.OpenFile(args[1], os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
 			if err != nil {
 				return fmt.Errorf("failed to open file: %w", err)
 			}
 			defer fileToWrite.Close()
-			newEntries := history[lastSavedHistory:]
-			for _, entry := range newEntries {
-				fmt.Fprintln(fileToWrite, entry)
+
+			for _, entry := range prevHistory {
+				fileToWrite.WriteString(entry + "\n")
 			}
+
 			lastSavedHistory = len(history)
 			return nil
 		}
