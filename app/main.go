@@ -215,8 +215,6 @@ func runPipeline(segments [][]string) {
 
 func main() {
 	useReadline := false
-
-	os.Truncate("../history.txt", 0)
 	history = nil
 	lastSavedHistory = 0
 
