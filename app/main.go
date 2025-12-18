@@ -220,11 +220,6 @@ func main() {
 	history = nil
 	lastSavedHistory = 0
 
-	historyFile, exists := os.LookupEnv("HISTFILE")
-	if exists {
-		readHistoryFromFile(historyFile)
-	}
-
 	if isStdinTerminal() {
 		config := &readline.Config{
 			Prompt:          "$ ",
@@ -243,6 +238,10 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 
+	historyFile, exists := os.LookupEnv("HISTFILE")
+	if exists {
+		readHistoryFromFile(historyFile)
+	}
 	for {
 		var inp string
 		var err error
