@@ -229,7 +229,7 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 						fileToAppend.WriteString(history[i] + "\n")
 					}
 				}
-				lastSavedHistory = len(history) - 1
+				lastSavedHistory = len(history)
 			}
 
 		} else {
