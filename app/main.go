@@ -241,6 +241,7 @@ func main() {
 		readHistoryFromFile(historyFile)
 	}
 	for {
+		fmt.Println(len(history))
 		var inp string
 		var err error
 		if useReadline {
