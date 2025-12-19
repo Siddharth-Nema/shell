@@ -236,13 +236,7 @@ func handleHistoryCommand(args []string, stdout io.WriteCloser) error {
 		case "-r":
 			readHistoryFromFile(args[1])
 		case "-w":
-			fileToWrite, err := os.OpenFile(args[1], os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
-			if err == nil {
-				defer fileToWrite.Close()
-				for _, historyCmd := range history {
-					fileToWrite.WriteString(historyCmd + "\n")
-				}
-			}
+			writeHistoryToFile(args[1])
 		case "-a":
 			if len(args) < 2 {
 				fmt.Fprintln(stdout, "history: -a requires a filename argument")
@@ -297,6 +291,16 @@ func readHistoryFromFile(filePath string) {
 				rl.SaveHistory(historyCmd)
 				history = append(history, historyCmd)
 			}
+		}
+	}
+}
+
+func writeHistoryToFile(filePath string) {
+	fileToWrite, err := os.OpenFile(filePath, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+	if err == nil {
+		defer fileToWrite.Close()
+		for _, historyCmd := range history {
+			fileToWrite.WriteString(historyCmd + "\n")
 		}
 	}
 }

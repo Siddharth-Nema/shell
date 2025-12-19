@@ -18,6 +18,8 @@ var STDERR = os.Stderr
 var history []string
 var rl *readline.Instance
 var lastSavedHistory int
+var historyFile string
+var historyFileExists bool
 
 // getOutputFiles processes redirection operators (>, >>, 2>, 2>>) from tokens and opens the target files.
 // It returns the output file, error file, and a filtered token slice without redirection operators.
@@ -128,6 +130,9 @@ func handleCommand(command string, args []string, stdin io.ReadCloser, stdout io
 	var err error
 	switch command {
 	case "exit":
+		if historyFileExists {
+			writeHistoryToFile(historyFile)
+		}
 		os.Exit(0)
 	case "cat":
 		err = handleCatWithIO(args, stdin, stdout, stderr)
@@ -210,7 +215,6 @@ func runPipeline(segments [][]string) {
 		}
 		wg.Wait()
 	}
-
 }
 
 func main() {
@@ -236,8 +240,8 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 
-	historyFile, exists := os.LookupEnv("HISTFILE")
-	if exists {
+	historyFile, historyFileExists = os.LookupEnv("HISTFILE")
+	if historyFileExists {
 		readHistoryFromFile(historyFile)
 	}
 	for {
