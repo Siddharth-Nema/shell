@@ -241,7 +241,6 @@ func main() {
 		readHistoryFromFile(historyFile)
 	}
 	for {
-		fmt.Println(len(history))
 		var inp string
 		var err error
 		if useReadline {
@@ -275,10 +274,10 @@ func main() {
 
 		if inp == "" {
 			continue
+		} else {
+			history = append(history, inp)
+			rl.SaveHistory(inp)
 		}
-
-		history = append(history, inp)
-		rl.SaveHistory(inp)
 
 		tokens := tokenize(inp)
 		outputFile, errorFile, filteredTokens := getOutputFiles(tokens)

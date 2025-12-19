@@ -293,8 +293,10 @@ func readHistoryFromFile(filePath string) {
 	if err == nil {
 		historyData := strings.Split(prevHistory, "\n")
 		for _, historyCmd := range historyData {
-			rl.SaveHistory(historyCmd)
-			history = append(history, historyCmd)
+			if historyCmd != "" {
+				rl.SaveHistory(historyCmd)
+				history = append(history, historyCmd)
+			}
 		}
 	}
 }
