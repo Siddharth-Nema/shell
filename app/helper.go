@@ -252,16 +252,14 @@ func handleHistoryCommand(args []string, stdout io.WriteCloser) error {
 			if err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("failed to read file: %w", err)
 			}
-			existingContent = bytes.TrimRight(existingContent, "\n")
-			if len(existingContent) > 0 {
-				existingContent = append(existingContent, '\n') // Keep one newline after last command
-			}
+			existingContent = bytes.TrimRight(existingContent, "\r\n")
 			prevHistory := strings.Split(strings.TrimRight(string(existingContent), "\r\n"), "\n")
+			fmt.Fprintf(stdout, "%d\n", len(prevHistory))
 			newEntries := history[lastSavedHistory:]
 			for _, entry := range newEntries {
 				prevHistory = append(prevHistory, entry)
 			}
-
+			fmt.Fprintf(stdout, "%d\n", len(prevHistory))
 			fileToWrite, err := os.OpenFile(args[1], os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
 			if err != nil {
 				return fmt.Errorf("failed to open file: %w", err)
